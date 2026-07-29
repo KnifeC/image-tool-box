@@ -745,6 +745,41 @@ export const useEditorStore = defineStore("editor", () => {
     });
   }
 
+  function moveNodeRelative(
+    id: string,
+    targetId: string,
+    position: "above" | "below",
+  ) {
+    if (id === targetId) return;
+    const currentOrder = nodes.value;
+    const currentIndex = currentOrder.findIndex((node) => node.id === id);
+    const targetIndex = currentOrder.findIndex((node) => node.id === targetId);
+    if (currentIndex < 0 || targetIndex < 0) return;
+    if (
+      (position === "above" && currentIndex === targetIndex + 1) ||
+      (position === "below" && currentIndex === targetIndex - 1)
+    ) {
+      return;
+    }
+
+    mutate("reorder-layer", () => {
+      const ordered = [...document.nodes].sort((a, b) => a.zIndex - b.zIndex);
+      const sourceIndex = ordered.findIndex((node) => node.id === id);
+      const [source] = ordered.splice(sourceIndex, 1);
+      const adjustedTargetIndex = ordered.findIndex(
+        (node) => node.id === targetId,
+      );
+      if (!source || adjustedTargetIndex < 0) return;
+      const insertIndex =
+        position === "above" ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+      ordered.splice(insertIndex, 0, source);
+      ordered.forEach((node, index) => {
+        node.zIndex = index;
+      });
+      document.nodes = ordered;
+    });
+  }
+
   function toggleNode(id: string, key: "visible" | "locked") {
     if (id === BACKGROUND_LAYER_ID) {
       toggleBackground(key);
@@ -1087,6 +1122,7 @@ export const useEditorStore = defineStore("editor", () => {
     deleteSelected,
     duplicateSelected,
     reorderNode,
+    moveNodeRelative,
     toggleNode,
     undo,
     redo,

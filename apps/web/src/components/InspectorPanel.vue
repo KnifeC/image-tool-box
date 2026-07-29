@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
   Eye,
   EyeOff,
+  GripHorizontal,
+  GripVertical,
   Lock,
   Trash2,
   Unlock,
@@ -31,7 +33,35 @@ const activeCreationTool = computed(() =>
 );
 const propertiesOpen = ref(true);
 const layersOpen = ref(true);
+const inspectorStackRef = ref<HTMLElement | null>(null);
+const panelSplit = ref(0.58);
+const panelResizing = ref(false);
+const draggedLayerId = ref<string | null>(null);
+const layerDropTargetId = ref<string | null>(null);
+const layerDropPosition = ref<"above" | "below">("above");
+let layerPointerDrag: {
+  layerId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  sourceElement: HTMLElement;
+} | null = null;
+let suppressLayerClickId: string | null = null;
 const textInputRef = ref<HTMLTextAreaElement | null>(null);
+const bothPanelsOpen = computed(() => propertiesOpen.value && layersOpen.value);
+const propertiesPanelStyle = computed(() =>
+  bothPanelsOpen.value
+    ? { flexBasis: `${Math.round(panelSplit.value * 10000) / 100}%` }
+    : undefined,
+);
+const canMoveLayerUp = computed(() => {
+  if (!node.value) return false;
+  return node.value.zIndex < store.nodes.length - 1;
+});
+const canMoveLayerDown = computed(() => {
+  if (!node.value) return false;
+  return node.value.zIndex > 0;
+});
 const canvasColor = computed(() =>
   store.document.canvas.background.type === "color"
     ? store.document.canvas.background.color
@@ -92,6 +122,181 @@ function selectLayer(layerId: string, additive = false) {
   store.select(layerId, additive);
   propertiesOpen.value = true;
 }
+
+function updatePanelSplit(clientY: number) {
+  const stack = inspectorStackRef.value;
+  if (!stack) return;
+  const bounds = stack.getBoundingClientRect();
+  const dividerHeight = 10;
+  const minimumPanelHeight = 96;
+  const availableHeight = Math.max(1, bounds.height - dividerHeight);
+  const propertiesHeight = Math.min(
+    availableHeight - minimumPanelHeight,
+    Math.max(minimumPanelHeight, clientY - bounds.top - dividerHeight / 2),
+  );
+  panelSplit.value = propertiesHeight / availableHeight;
+}
+
+function startPanelResize(event: PointerEvent) {
+  if (event.button !== 0 || !bothPanelsOpen.value) return;
+  panelResizing.value = true;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  updatePanelSplit(event.clientY);
+  event.preventDefault();
+}
+
+function resizePanels(event: PointerEvent) {
+  if (!panelResizing.value) return;
+  updatePanelSplit(event.clientY);
+}
+
+function finishPanelResize(event: PointerEvent) {
+  if (!panelResizing.value) return;
+  updatePanelSplit(event.clientY);
+  panelResizing.value = false;
+  const target = event.currentTarget as HTMLElement;
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId);
+  }
+}
+
+function resizePanelsWithKeyboard(event: KeyboardEvent) {
+  const step = event.shiftKey ? 0.08 : 0.03;
+  if (event.key === "ArrowUp") {
+    panelSplit.value = Math.max(0.2, panelSplit.value - step);
+  } else if (event.key === "ArrowDown") {
+    panelSplit.value = Math.min(0.8, panelSplit.value + step);
+  } else if (event.key === "Home") {
+    panelSplit.value = 0.2;
+  } else if (event.key === "End") {
+    panelSplit.value = 0.8;
+  } else {
+    return;
+  }
+  event.preventDefault();
+}
+
+function prepareLayerPointerDrag(event: PointerEvent, layerId: string) {
+  if (event.button !== 0) return;
+  const origin = event.target as HTMLElement;
+  if (origin.closest(".layer-icon-action")) return;
+  if (
+    event.pointerType !== "mouse" &&
+    !origin.closest(".layer-drag-handle")
+  ) {
+    return;
+  }
+  layerPointerDrag = {
+    layerId,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    sourceElement: event.currentTarget as HTMLElement,
+  };
+  layerPointerDrag.sourceElement.setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", continueLayerPointerDrag, {
+    passive: false,
+  });
+  window.addEventListener("pointerup", finishLayerPointerDrag);
+  window.addEventListener("pointercancel", cancelLayerPointerDrag);
+  if (event.pointerType === "mouse") {
+    window.addEventListener("mouseup", finishLayerMouseDrag);
+  }
+}
+
+function continueLayerPointerDrag(event: PointerEvent) {
+  const drag = layerPointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (!draggedLayerId.value) {
+    const distance = Math.hypot(
+      event.clientX - drag.startX,
+      event.clientY - drag.startY,
+    );
+    if (distance < 6) return;
+    draggedLayerId.value = drag.layerId;
+    layerDropTargetId.value = null;
+    selectLayer(drag.layerId);
+  }
+  const targetRow = document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.closest<HTMLElement>(".layer-row[data-layer-id]");
+  const targetId = targetRow?.dataset.layerId;
+  if (!targetRow || !targetId || targetId === drag.layerId) {
+    layerDropTargetId.value = null;
+    return;
+  }
+  const bounds = targetRow.getBoundingClientRect();
+  layerDropTargetId.value = targetId;
+  layerDropPosition.value =
+    event.clientY < bounds.top + bounds.height / 2 ? "above" : "below";
+  event.preventDefault();
+}
+
+function finishLayerPointerDrag(event: PointerEvent) {
+  const drag = layerPointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  completeLayerPointerDrag(event);
+}
+
+function finishLayerMouseDrag(event: MouseEvent) {
+  if (!layerPointerDrag) return;
+  completeLayerPointerDrag(event);
+}
+
+function completeLayerPointerDrag(event: Event) {
+  const drag = layerPointerDrag;
+  if (!drag) return;
+  const wasDragging = draggedLayerId.value === drag.layerId;
+  const targetId = layerDropTargetId.value;
+  if (drag.sourceElement.hasPointerCapture(drag.pointerId)) {
+    drag.sourceElement.releasePointerCapture(drag.pointerId);
+  }
+  removeLayerPointerListeners();
+  if (wasDragging && targetId) {
+    store.moveNodeRelative(drag.layerId, targetId, layerDropPosition.value);
+  }
+  clearLayerDrag();
+  if (wasDragging) {
+    suppressLayerClickId = drag.layerId;
+    window.setTimeout(() => {
+      if (suppressLayerClickId === drag.layerId) suppressLayerClickId = null;
+    }, 0);
+    event.preventDefault();
+  }
+}
+
+function cancelLayerPointerDrag(event: PointerEvent) {
+  const drag = layerPointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (drag.sourceElement.hasPointerCapture(event.pointerId)) {
+    drag.sourceElement.releasePointerCapture(event.pointerId);
+  }
+  removeLayerPointerListeners();
+  clearLayerDrag();
+}
+
+function removeLayerPointerListeners() {
+  window.removeEventListener("pointermove", continueLayerPointerDrag);
+  window.removeEventListener("pointerup", finishLayerPointerDrag);
+  window.removeEventListener("pointercancel", cancelLayerPointerDrag);
+  window.removeEventListener("mouseup", finishLayerMouseDrag);
+  layerPointerDrag = null;
+}
+
+function handleLayerClick(layerId: string, additive: boolean) {
+  if (suppressLayerClickId === layerId) {
+    suppressLayerClickId = null;
+    return;
+  }
+  selectLayer(layerId, additive);
+}
+
+function clearLayerDrag() {
+  draggedLayerId.value = null;
+  layerDropTargetId.value = null;
+}
+
+onBeforeUnmount(removeLayerPointerListeners);
 
 function updateImageBorder(key: "enabled" | "color" | "width", value: boolean | string | number) {
   if (node.value?.type !== "image") return;
@@ -255,10 +460,15 @@ const canvasPresets = [
     </template>
 
     <template v-else>
-      <div class="inspector-stack">
+      <div
+        ref="inspectorStackRef"
+        class="inspector-stack"
+        :class="{ 'is-resizing': panelResizing }"
+      >
         <section
           class="inspector-accordion properties-accordion"
           :class="{ open: propertiesOpen }"
+          :style="propertiesPanelStyle"
         >
           <button
             class="inspector-section-toggle"
@@ -683,6 +893,26 @@ const canvasPresets = [
           </div>
         </section>
 
+        <div
+          v-show="bothPanelsOpen"
+          class="panel-resizer"
+          data-testid="inspector-panel-resizer"
+          role="separator"
+          aria-label="调整属性和图层面板高度"
+          aria-orientation="horizontal"
+          aria-valuemin="20"
+          aria-valuemax="80"
+          :aria-valuenow="Math.round(panelSplit * 100)"
+          tabindex="0"
+          @keydown="resizePanelsWithKeyboard"
+          @pointerdown="startPanelResize"
+          @pointermove="resizePanels"
+          @pointerup="finishPanelResize"
+          @pointercancel="finishPanelResize"
+        >
+          <GripHorizontal :size="16" aria-hidden="true" />
+        </div>
+
         <section
           class="inspector-accordion layers-accordion"
           :class="{ open: layersOpen }"
@@ -713,10 +943,26 @@ const canvasPresets = [
           v-for="layer in [...store.nodes].reverse()"
           :key="layer.id"
           class="layer-row"
-          :class="{ selected: store.selectedIds.includes(layer.id) }"
+          :class="{
+            selected: store.selectedIds.includes(layer.id),
+            dragging: draggedLayerId === layer.id,
+            'drag-over-above':
+              layerDropTargetId === layer.id && layerDropPosition === 'above',
+            'drag-over-below':
+              layerDropTargetId === layer.id && layerDropPosition === 'below',
+          }"
           type="button"
-          @click="selectLayer(layer.id, $event.shiftKey)"
+          :data-layer-id="layer.id"
+          :aria-label="`${layer.name}，拖动可调整图层顺序`"
+          @pointerdown="prepareLayerPointerDrag($event, layer.id)"
+          @click="handleLayerClick(layer.id, $event.shiftKey)"
         >
+          <span
+            class="layer-drag-handle"
+            title="拖动调整图层顺序"
+          >
+            <GripVertical :size="15" aria-hidden="true" />
+          </span>
           <span
             class="layer-icon-action"
             role="button"
@@ -768,11 +1014,23 @@ const canvasPresets = [
           </span>
         </button>
         <div v-if="node" class="layer-order-actions">
-          <button type="button" @click="store.reorderNode(node.id, 1)">
+          <button
+            type="button"
+            data-testid="move-layer-up"
+            :disabled="!canMoveLayerUp"
+            title="将当前图层上移一层"
+            @click="store.reorderNode(node.id, 1)"
+          >
             <ArrowUp :size="16" />
             上移
           </button>
-          <button type="button" @click="store.reorderNode(node.id, -1)">
+          <button
+            type="button"
+            data-testid="move-layer-down"
+            :disabled="!canMoveLayerDown"
+            title="将当前图层下移一层"
+            @click="store.reorderNode(node.id, -1)"
+          >
             <ArrowDown :size="16" />
             下移
           </button>
