@@ -558,6 +558,23 @@ textarea:focus-visible {
   min-height: 0;
 }
 
+.background-toggle-list {
+  display: grid;
+  gap: 11px;
+  margin-top: 15px;
+}
+
+.background-toggle-list label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.background-toggle-list input {
+  accent-color: var(--accent);
+}
+
 .canvas-preset-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -582,6 +599,14 @@ textarea:focus-visible {
   color: var(--accent);
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+.canvas-preset-grid button:disabled,
+.canvas-size-actions button:disabled {
+  color: #9ba1ad;
+  background: #f5f6f8;
+  border-color: var(--border);
+  cursor: not-allowed;
 }
 
 .canvas-preset-grid strong {
@@ -698,6 +723,12 @@ textarea:focus-visible {
 .layer-row.selected {
   color: #243ea8;
   background: var(--accent-soft);
+}
+
+.background-layer-row {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
 }
 
 .layer-icon-action {

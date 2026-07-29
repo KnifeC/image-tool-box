@@ -8,18 +8,34 @@ const store = useEditorStore();
 const wrapper = ref<HTMLDivElement | null>(null);
 const stageRef = ref<any>(null);
 const transformerRef = ref<any>(null);
+const cropRectRef = ref<any>(null);
+const cropTransformerRef = ref<any>(null);
 const size = ref({ width: 900, height: 700 });
+const fitOrigin = ref({ x: 0, y: 0 });
 const images = new Map<string, HTMLImageElement>();
 const imageVersion = ref(0);
-const drawing = ref(false);
 const draftPoints = ref<number[]>([]);
+const draftLinear = ref<{
+  type: "line" | "arrow";
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+} | null>(null);
+const gesture = ref<"freehand" | "linear" | "pan" | null>(null);
+const panStart = ref<{
+  pointer: { x: number; y: number };
+  offset: { x: number; y: number };
+} | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 const checkerboardPattern = createCheckerboardPattern();
 
+const activeBounds = computed(() => store.documentBounds ?? store.backgroundBounds);
 const stagePosition = computed(() => ({
-  x: (size.value.width - store.document.canvas.width * store.zoom) / 2 + store.viewOffset.x,
-  y: (size.value.height - store.document.canvas.height * store.zoom) / 2 + store.viewOffset.y,
+  x: fitOrigin.value.x + store.viewOffset.x,
+  y: fitOrigin.value.y + store.viewOffset.y,
 }));
+const stageCursor = computed(() =>
+  store.effectivePan ? (gesture.value === "pan" ? "grabbing" : "grab") : "default",
+);
 
 const backgroundColor = computed(() =>
   store.document.canvas.background.type === "color"
@@ -48,17 +64,43 @@ watchEffect(() => {
 });
 
 watch(
-  () => [store.selectedIds.slice(), store.tool, store.nodes.length],
+  () => [
+    store.selectedIds.slice(),
+    store.tool,
+    store.nodes.length,
+    store.document.canvas.background.locked,
+    store.document.canvas.background.autoSize,
+    store.cropSelection,
+  ],
   async () => {
     await nextTick();
     const transformer = transformerRef.value?.getNode?.();
+    const cropTransformer = cropTransformerRef.value?.getNode?.();
     const stage = stageRef.value?.getNode?.();
-    if (!transformer || !stage || store.tool === "crop") return transformer?.nodes([]);
-    const selected = store.selectedIds
-      .map((id) => stage.findOne(`#${id}`))
-      .filter(Boolean);
-    transformer.nodes(selected);
-    transformer.getLayer()?.batchDraw();
+    if (transformer && stage) {
+      if (store.tool === "crop" || store.tool !== "select") {
+        transformer.nodes([]);
+      } else {
+        const selected = store.selectedIds
+          .filter(
+            (id) =>
+              id !== "background" ||
+              (!store.document.canvas.background.locked &&
+                !store.document.canvas.background.autoSize),
+          )
+          .map((id) => stage.findOne(`#${id}`))
+          .filter(Boolean);
+        transformer.nodes(selected);
+        transformer.getLayer()?.batchDraw();
+      }
+    }
+    if (cropTransformer) {
+      const cropNode = cropRectRef.value?.getNode?.();
+      cropTransformer.nodes(
+        store.tool === "crop" && cropNode ? [cropNode] : [],
+      );
+      cropTransformer.getLayer()?.batchDraw();
+    }
   },
   { deep: true },
 );
@@ -67,18 +109,24 @@ watch(
   () => [
     size.value.width,
     size.value.height,
-    store.document.canvas.width,
-    store.document.canvas.height,
     store.fitRequest,
   ],
   () => {
     const padding = size.value.width <= 560 ? 32 : 72;
     const nextZoom = Math.min(
-      (size.value.width - padding) / store.document.canvas.width,
-      (size.value.height - padding) / store.document.canvas.height,
+      (size.value.width - padding) / activeBounds.value.width,
+      (size.value.height - padding) / activeBounds.value.height,
       1,
     );
     store.zoom = Math.max(0.1, Math.min(3, nextZoom));
+    fitOrigin.value = {
+      x:
+        (size.value.width - activeBounds.value.width * store.zoom) / 2 -
+        activeBounds.value.x * store.zoom,
+      y:
+        (size.value.height - activeBounds.value.height * store.zoom) / 2 -
+        activeBounds.value.y * store.zoom,
+    };
     store.viewOffset.x = 0;
     store.viewOffset.y = 0;
   },
@@ -94,9 +142,17 @@ onMounted(() => {
     };
   });
   if (wrapper.value) resizeObserver.observe(wrapper.value);
+  window.addEventListener("mouseup", finishGesture);
+  window.addEventListener("touchend", finishGesture);
+  window.addEventListener("blur", cancelGesture);
 });
 
-onBeforeUnmount(() => resizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  window.removeEventListener("mouseup", finishGesture);
+  window.removeEventListener("touchend", finishGesture);
+  window.removeEventListener("blur", cancelGesture);
+});
 
 function imageFor(assetId: string) {
   imageVersion.value;
@@ -122,29 +178,83 @@ function onWheel(event: any) {
 
 function onStagePointerDown(event: any) {
   const stage = event.target.getStage();
+  const screenPoint = stage.getPointerPosition();
+  if (!screenPoint || gesture.value) return;
+  event.evt?.preventDefault?.();
+  if (store.effectivePan) {
+    gesture.value = "pan";
+    panStart.value = {
+      pointer: screenPoint,
+      offset: { ...store.viewOffset },
+    };
+    return;
+  }
+  const point = documentPoint(stage);
+  if (!point) return;
   if (store.tool === "pen" || store.tool === "highlighter") {
-    const point = documentPoint(stage);
-    if (!point) return;
-    drawing.value = true;
+    gesture.value = "freehand";
     draftPoints.value = [point.x, point.y];
+    return;
+  }
+  if (store.tool === "line" || store.tool === "arrow") {
+    gesture.value = "linear";
+    draftLinear.value = {
+      type: store.tool,
+      start: point,
+      end: point,
+    };
     return;
   }
   if (event.target === stage) store.select(null);
 }
 
 function onStagePointerMove(event: any) {
-  if (!drawing.value) return;
-  const point = documentPoint(event.target.getStage());
-  if (point) draftPoints.value.push(point.x, point.y);
+  const stage = event.target.getStage();
+  if (gesture.value === "pan" && panStart.value) {
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+    store.viewOffset.x =
+      panStart.value.offset.x + pointer.x - panStart.value.pointer.x;
+    store.viewOffset.y =
+      panStart.value.offset.y + pointer.y - panStart.value.pointer.y;
+    return;
+  }
+  const point = documentPoint(stage);
+  if (!point) return;
+  if (gesture.value === "freehand") {
+    const points = draftPoints.value;
+    const lastX = points.at(-2) ?? point.x;
+    const lastY = points.at(-1) ?? point.y;
+    const minimumDistance = 2 / store.zoom;
+    if (Math.hypot(point.x - lastX, point.y - lastY) < minimumDistance) return;
+    draftPoints.value = [...points, point.x, point.y];
+  } else if (gesture.value === "linear" && draftLinear.value) {
+    draftLinear.value = { ...draftLinear.value, end: point };
+  }
 }
 
-function onStagePointerUp() {
-  if (!drawing.value) return;
-  drawing.value = false;
-  if (store.tool === "pen" || store.tool === "highlighter") {
-    store.addFreehand(draftPoints.value, store.tool);
+function finishGesture() {
+  if (gesture.value === "freehand" && draftPoints.value.length >= 4) {
+    const drawTool =
+      store.tool === "highlighter" ? "highlighter" : "pen";
+    store.addFreehand(draftPoints.value, drawTool);
+  } else if (gesture.value === "linear" && draftLinear.value) {
+    const { type, start, end } = draftLinear.value;
+    if (Math.hypot(end.x - start.x, end.y - start.y) * store.zoom >= 4) {
+      store.addLinearNode(type, start, end);
+    }
   }
+  gesture.value = null;
+  panStart.value = null;
   draftPoints.value = [];
+  draftLinear.value = null;
+}
+
+function cancelGesture() {
+  gesture.value = null;
+  panStart.value = null;
+  draftPoints.value = [];
+  draftLinear.value = null;
 }
 
 function documentPoint(stage: Konva.Stage) {
@@ -177,6 +287,28 @@ function transformEnd(event: any, id: string) {
   });
 }
 
+function backgroundTransformEnd(event: any) {
+  const target = event.target;
+  const width = Math.max(1, target.width() * target.scaleX());
+  const height = Math.max(1, target.height() * target.scaleY());
+  target.scaleX(1);
+  target.scaleY(1);
+  store.transformBackground({
+    x: target.x(),
+    y: target.y(),
+    width,
+    height,
+  });
+}
+
+function backgroundDragEnd(event: any) {
+  store.transformBackground({
+    ...store.backgroundBounds,
+    x: event.target.x(),
+    y: event.target.y(),
+  });
+}
+
 function dragEnd(event: any, id: string) {
   const node = store.nodes.find((candidate) => candidate.id === id);
   if (!node) return;
@@ -186,6 +318,32 @@ function dragEnd(event: any, id: string) {
     width: node.width,
     height: node.height,
     rotation: node.rotation,
+  });
+}
+
+function cropDragEnd(event: any) {
+  const selection = store.cropSelection;
+  if (!selection) return;
+  store.updateCropSelection({
+    ...selection,
+    x: event.target.x(),
+    y: event.target.y(),
+  });
+}
+
+function cropTransformEnd(event: any) {
+  const target = event.target;
+  const selection = store.cropSelection;
+  if (!selection) return;
+  const width = Math.max(1, target.width() * target.scaleX());
+  const height = Math.max(1, target.height() * target.scaleY());
+  target.scaleX(1);
+  target.scaleY(1);
+  store.updateCropSelection({
+    x: target.x(),
+    y: target.y(),
+    width,
+    height,
   });
 }
 
@@ -206,7 +364,7 @@ function createCheckerboardPattern() {
 </script>
 
 <template>
-  <main ref="wrapper" class="workspace">
+  <main ref="wrapper" class="workspace" :style="{ cursor: stageCursor }">
     <v-stage
       ref="stageRef"
       :config="{ width: size.width, height: size.height }"
@@ -215,8 +373,8 @@ function createCheckerboardPattern() {
       @touchstart="onStagePointerDown"
       @mousemove="onStagePointerMove"
       @touchmove="onStagePointerMove"
-      @mouseup="onStagePointerUp"
-      @touchend="onStagePointerUp"
+      @mouseup="finishGesture"
+      @touchend="finishGesture"
     >
       <v-layer
         :config="{
@@ -227,11 +385,13 @@ function createCheckerboardPattern() {
         }"
       >
         <v-rect
+          v-if="store.document.canvas.background.visible"
           :config="{
-            x: 0,
-            y: 0,
-            width: store.document.canvas.width,
-            height: store.document.canvas.height,
+            id: store.document.canvas.background.id,
+            x: store.backgroundBounds.x,
+            y: store.backgroundBounds.y,
+            width: store.backgroundBounds.width,
+            height: store.backgroundBounds.height,
             fill: backgroundColor,
             fillPatternImage: backgroundPattern,
             fillPatternRepeat: 'repeat',
@@ -239,8 +399,19 @@ function createCheckerboardPattern() {
             shadowBlur: 24,
             shadowOpacity: 0.18,
             shadowOffsetY: 8,
-            listening: false,
+            listening:
+              store.tool === 'select' &&
+              !store.document.canvas.background.locked &&
+              !store.document.canvas.background.autoSize,
+            draggable:
+              store.tool === 'select' &&
+              !store.document.canvas.background.locked &&
+              !store.document.canvas.background.autoSize,
           }"
+          @mousedown="selectNode($event, store.document.canvas.background.id)"
+          @touchstart="selectNode($event, store.document.canvas.background.id)"
+          @dragend="backgroundDragEnd"
+          @transformend="backgroundTransformEnd"
         />
 
         <template v-for="node in store.nodes" :key="node.id">
@@ -431,28 +602,114 @@ function createCheckerboardPattern() {
           }"
         />
 
-        <template v-if="store.tool === 'crop' && store.selectedImage">
+        <v-arrow
+          v-if="draftLinear?.type === 'arrow'"
+          :config="{
+            points: [
+              draftLinear.start.x,
+              draftLinear.start.y,
+              draftLinear.end.x,
+              draftLinear.end.y,
+            ],
+            stroke: '#f05252',
+            fill: '#f05252',
+            strokeWidth: 4,
+            pointerLength: 16,
+            pointerWidth: 14,
+            lineCap: 'round',
+            listening: false,
+          }"
+        />
+        <v-line
+          v-else-if="draftLinear"
+          :config="{
+            points: [
+              draftLinear.start.x,
+              draftLinear.start.y,
+              draftLinear.end.x,
+              draftLinear.end.y,
+            ],
+            stroke: '#3157f5',
+            strokeWidth: 4,
+            lineCap: 'round',
+            listening: false,
+          }"
+        />
+
+        <v-group
+          v-if="
+            store.tool === 'crop' &&
+            store.selectedImage &&
+            store.cropSelection
+          "
+          :config="{
+            x: store.selectedImage.x,
+            y: store.selectedImage.y,
+            rotation: store.selectedImage.rotation,
+          }"
+        >
           <v-rect
+            v-for="mask in [
+              { x: 0, y: 0, width: store.selectedImage.width, height: store.cropSelection.y },
+              {
+                x: 0,
+                y: store.cropSelection.y + store.cropSelection.height,
+                width: store.selectedImage.width,
+                height:
+                  store.selectedImage.height -
+                  store.cropSelection.y -
+                  store.cropSelection.height,
+              },
+              {
+                x: 0,
+                y: store.cropSelection.y,
+                width: store.cropSelection.x,
+                height: store.cropSelection.height,
+              },
+              {
+                x: store.cropSelection.x + store.cropSelection.width,
+                y: store.cropSelection.y,
+                width:
+                  store.selectedImage.width -
+                  store.cropSelection.x -
+                  store.cropSelection.width,
+                height: store.cropSelection.height,
+              },
+            ]"
+            :key="`${mask.x}-${mask.y}-${mask.width}-${mask.height}`"
             :config="{
-              x: store.selectedImage.x,
-              y: store.selectedImage.y,
-              width: store.selectedImage.width,
-              height: store.selectedImage.height,
-              stroke: '#ffffff',
-              strokeWidth: 3 / store.zoom,
-              dash: [10 / store.zoom, 6 / store.zoom],
+              ...mask,
+              fill: 'rgba(10, 15, 28, 0.48)',
               listening: false,
             }"
           />
+          <v-rect
+            ref="cropRectRef"
+            :config="{
+              id: 'crop-selection',
+              x: store.cropSelection.x,
+              y: store.cropSelection.y,
+              width: store.cropSelection.width,
+              height: store.cropSelection.height,
+              fill: 'rgba(255,255,255,0.01)',
+              stroke: '#ffffff',
+              strokeWidth: 2 / store.zoom,
+              draggable: true,
+            }"
+            @dragend="cropDragEnd"
+            @transformend="cropTransformEnd"
+            @dblclick="store.applyCrop"
+            @dbltap="store.applyCrop"
+          />
           <v-line
             v-for="fraction in [1 / 3, 2 / 3]"
-            :key="`v-${fraction}`"
+            :key="`crop-v-${fraction}`"
             :config="{
               points: [
-                store.selectedImage.x + store.selectedImage.width * fraction,
-                store.selectedImage.y,
-                store.selectedImage.x + store.selectedImage.width * fraction,
-                store.selectedImage.y + store.selectedImage.height,
+                store.cropSelection.x + store.cropSelection.width * fraction,
+                store.cropSelection.y,
+                store.cropSelection.x + store.cropSelection.width * fraction,
+                store.cropSelection.y + store.cropSelection.height,
               ],
               stroke: '#ffffff',
               strokeWidth: 1 / store.zoom,
@@ -462,13 +719,13 @@ function createCheckerboardPattern() {
           />
           <v-line
             v-for="fraction in [1 / 3, 2 / 3]"
-            :key="`h-${fraction}`"
+            :key="`crop-h-${fraction}`"
             :config="{
               points: [
-                store.selectedImage.x,
-                store.selectedImage.y + store.selectedImage.height * fraction,
-                store.selectedImage.x + store.selectedImage.width,
-                store.selectedImage.y + store.selectedImage.height * fraction,
+                store.cropSelection.x,
+                store.cropSelection.y + store.cropSelection.height * fraction,
+                store.cropSelection.x + store.cropSelection.width,
+                store.cropSelection.y + store.cropSelection.height * fraction,
               ],
               stroke: '#ffffff',
               strokeWidth: 1 / store.zoom,
@@ -476,7 +733,31 @@ function createCheckerboardPattern() {
               listening: false,
             }"
           />
-        </template>
+          <v-transformer
+            ref="cropTransformerRef"
+            :config="{
+              rotateEnabled: false,
+              keepRatio: false,
+              flipEnabled: false,
+              borderStroke: '#ffffff',
+              borderStrokeWidth: 2 / store.zoom,
+              anchorFill: '#ffffff',
+              anchorStroke: '#3157f5',
+              anchorStrokeWidth: 2 / store.zoom,
+              anchorSize: 11 / store.zoom,
+              enabledAnchors: [
+                'top-left',
+                'top-right',
+                'bottom-left',
+                'bottom-right',
+                'middle-left',
+                'middle-right',
+                'top-center',
+                'bottom-center',
+              ],
+            }"
+          />
+        </v-group>
 
         <v-transformer
           ref="transformerRef"

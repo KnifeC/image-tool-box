@@ -1,4 +1,9 @@
-import { getNodeBounds, type ImageToolBoxDocument, type SceneNode } from "@imagetoolbox/editor-core";
+import {
+  getDocumentBounds,
+  getNodeBounds,
+  type ImageToolBoxDocument,
+  type SceneNode,
+} from "@imagetoolbox/editor-core";
 
 export async function renderDocument(
   document: ImageToolBoxDocument,
@@ -17,7 +22,8 @@ export async function renderDocument(
   const bounds =
     options.selectionOnly && targetNodes.length
       ? getNodeBounds(targetNodes)!
-      : { x: 0, y: 0, width: document.canvas.width, height: document.canvas.height };
+      : getDocumentBounds(document);
+  if (!bounds) throw new Error("Nothing visible to export");
   const canvas = globalThis.document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(bounds.width * options.scale));
   canvas.height = Math.max(1, Math.round(bounds.height * options.scale));
@@ -25,11 +31,13 @@ export async function renderDocument(
   if (!context) throw new Error("Canvas 2D is unavailable");
   context.scale(options.scale, options.scale);
   context.translate(-bounds.x, -bounds.y);
-  if (
-    document.canvas.background.type === "color" ||
-    options.format === "image/jpeg"
-  ) {
+  if (options.format === "image/jpeg" || (
+    !options.selectionOnly &&
+    document.canvas.background.visible &&
+    document.canvas.background.type === "color"
+  )) {
     context.fillStyle =
+      options.format !== "image/jpeg" &&
       document.canvas.background.type === "color"
         ? document.canvas.background.color
         : "#ffffff";
@@ -216,4 +224,3 @@ function drawArrowHead(
   context.closePath();
   context.fill();
 }
-

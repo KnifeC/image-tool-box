@@ -25,11 +25,11 @@ const canvasColor = computed(() =>
     ? store.document.canvas.background.color
     : "#ffffff",
 );
-const canvasWidthDraft = ref(store.document.canvas.width);
-const canvasHeightDraft = ref(store.document.canvas.height);
+const canvasWidthDraft = ref(store.backgroundBounds.width);
+const canvasHeightDraft = ref(store.backgroundBounds.height);
 
 watch(
-  () => [store.document.canvas.width, store.document.canvas.height],
+  () => [store.backgroundBounds.width, store.backgroundBounds.height],
   ([width, height]) => {
     canvasWidthDraft.value = width ?? 1;
     canvasHeightDraft.value = height ?? 1;
@@ -138,7 +138,7 @@ const canvasPresets = [
             <label>
               <span>宽 / W</span>
               <input
-                :value="Math.round(store.selectedImage.cropRect.width)"
+                :value="Math.round(store.cropSelection?.width ?? 0)"
                 type="number"
                 readonly
               />
@@ -146,7 +146,7 @@ const canvasPresets = [
             <label>
               <span>高 / H</span>
               <input
-                :value="Math.round(store.selectedImage.cropRect.height)"
+                :value="Math.round(store.cropSelection?.height ?? 0)"
                 type="number"
                 readonly
               />
@@ -380,7 +380,40 @@ const canvasPresets = [
         </template>
         <div v-else class="canvas-settings">
           <section class="property-section">
-            <h3>画布尺寸 / Canvas size</h3>
+            <h3>背景图层 / Background layer</h3>
+            <div class="background-toggle-list">
+              <label>
+                <span>显示背景 / Visible</span>
+                <input
+                  :checked="store.document.canvas.background.visible"
+                  type="checkbox"
+                  @change="store.toggleBackground('visible')"
+                />
+              </label>
+              <label>
+                <span>锁定背景 / Locked</span>
+                <input
+                  :checked="store.document.canvas.background.locked"
+                  type="checkbox"
+                  @change="store.toggleBackground('locked')"
+                />
+              </label>
+              <label>
+                <span>自适应大小 / Auto size</span>
+                <input
+                  :checked="store.document.canvas.background.autoSize"
+                  type="checkbox"
+                  @change="
+                    store.setBackgroundAutoSize(
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />
+              </label>
+            </div>
+          </section>
+          <section class="property-section">
+            <h3>背景尺寸 / Background size</h3>
             <div class="canvas-preset-grid">
               <button
                 v-for="preset in canvasPresets"
@@ -388,9 +421,10 @@ const canvasPresets = [
                 type="button"
                 :class="{
                   active:
-                    store.document.canvas.width === preset.width &&
-                    store.document.canvas.height === preset.height,
+                    store.backgroundBounds.width === preset.width &&
+                    store.backgroundBounds.height === preset.height,
                 }"
+                :disabled="store.document.canvas.background.autoSize"
                 @click="store.setCanvasSize(preset.width, preset.height)"
               >
                 <strong>{{ preset.label }}</strong>
@@ -405,6 +439,7 @@ const canvasPresets = [
                   type="number"
                   min="1"
                   max="16384"
+                  :disabled="store.document.canvas.background.autoSize"
                 />
               </label>
               <label>
@@ -414,14 +449,23 @@ const canvasPresets = [
                   type="number"
                   min="1"
                   max="16384"
+                  :disabled="store.document.canvas.background.autoSize"
                 />
               </label>
             </div>
             <div class="canvas-size-actions">
-              <button type="button" @click="applyCanvasSize">
+              <button
+                type="button"
+                :disabled="store.document.canvas.background.autoSize"
+                @click="applyCanvasSize"
+              >
                 应用尺寸 / Apply
               </button>
-              <button type="button" @click="store.swapCanvasSize">
+              <button
+                type="button"
+                :disabled="store.document.canvas.background.autoSize"
+                @click="store.swapCanvasSize"
+              >
                 交换宽高 / Swap
               </button>
             </div>
@@ -472,7 +516,7 @@ const canvasPresets = [
 
       <div v-else class="panel-scroll layers-panel">
         <div class="layers-heading">
-          <span>{{ store.nodes.length }} 个对象</span>
+          <span>{{ store.nodes.length + 1 }} 个图层</span>
           <button type="button" :disabled="!node" @click="store.deleteSelected">
             <Trash2 :size="16" />
           </button>
@@ -503,6 +547,35 @@ const canvasPresets = [
             @click.stop="store.toggleNode(layer.id, 'locked')"
           >
             <Lock v-if="layer.locked" :size="15" />
+            <Unlock v-else :size="15" />
+          </span>
+        </button>
+        <button
+          class="layer-row background-layer-row"
+          :class="{ selected: store.backgroundSelected }"
+          type="button"
+          @click="store.select(store.document.canvas.background.id)"
+        >
+          <span
+            class="layer-icon-action"
+            role="button"
+            tabindex="0"
+            @click.stop="store.toggleBackground('visible')"
+          >
+            <Eye v-if="store.document.canvas.background.visible" :size="17" />
+            <EyeOff v-else :size="17" />
+          </span>
+          <span class="layer-type">B</span>
+          <span class="layer-name">
+            {{ store.document.canvas.background.name }}
+          </span>
+          <span
+            class="layer-icon-action"
+            role="button"
+            tabindex="0"
+            @click.stop="store.toggleBackground('locked')"
+          >
+            <Lock v-if="store.document.canvas.background.locked" :size="15" />
             <Unlock v-else :size="15" />
           </span>
         </button>

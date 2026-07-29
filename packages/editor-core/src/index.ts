@@ -8,10 +8,22 @@ export type Rect = {
 export type CanvasConfig = {
   width: number;
   height: number;
-  background:
-    | { type: "color"; color: string }
-    | { type: "transparent" };
+  background: BackgroundLayerConfig;
 };
+
+export const BACKGROUND_LAYER_ID = "background";
+
+export type BackgroundLayerConfig = {
+  id: typeof BACKGROUND_LAYER_ID;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  autoSize: boolean;
+  bounds: Rect;
+} & (
+  | { type: "color"; color: string }
+  | { type: "transparent" }
+);
 
 export type AssetRecord = {
   id: string;
@@ -259,7 +271,16 @@ export function createDocument(name = "未命名 / Untitled"): ImageToolBoxDocum
     canvas: {
       width: 1080,
       height: 1080,
-      background: { type: "color", color: "#ffffff" },
+      background: {
+        id: BACKGROUND_LAYER_ID,
+        name: "背景 / Background",
+        type: "color",
+        color: "#ffffff",
+        visible: true,
+        locked: true,
+        autoSize: true,
+        bounds: { x: 0, y: 0, width: 1080, height: 1080 },
+      },
     },
     assets: [],
     nodes: [],
@@ -278,10 +299,69 @@ export function normalizeZIndexes(nodes: SceneNode[]) {
 
 export function getNodeBounds(nodes: SceneNode[]): Rect | null {
   if (!nodes.length) return null;
-  const minX = Math.min(...nodes.map((node) => node.x));
-  const minY = Math.min(...nodes.map((node) => node.y));
-  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
-  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  const corners = nodes.flatMap((node) => {
+    const radians = (node.rotation * Math.PI) / 180;
+    const cosine = Math.cos(radians);
+    const sine = Math.sin(radians);
+    return [
+      [0, 0],
+      [node.width, 0],
+      [node.width, node.height],
+      [0, node.height],
+    ].map(([localX = 0, localY = 0]) => ({
+      x: node.x + localX * cosine - localY * sine,
+      y: node.y + localX * sine + localY * cosine,
+    }));
+  });
+  const minX = Math.min(...corners.map((point) => point.x));
+  const minY = Math.min(...corners.map((point) => point.y));
+  const maxX = Math.max(...corners.map((point) => point.x));
+  const maxY = Math.max(...corners.map((point) => point.y));
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
+export function getEffectiveBackgroundBounds(document: ImageToolBoxDocument): Rect {
+  if (document.canvas.background.autoSize) {
+    const contentBounds = getNodeBounds(
+      document.nodes.filter((node) => node.visible),
+    );
+    if (contentBounds) return contentBounds;
+  }
+  return { ...document.canvas.background.bounds };
+}
+
+export function getDocumentBounds(document: ImageToolBoxDocument): Rect | null {
+  if (document.canvas.background.visible) {
+    return getEffectiveBackgroundBounds(document);
+  }
+  return getNodeBounds(document.nodes.filter((node) => node.visible));
+}
+
+export function normalizeDocument(document: ImageToolBoxDocument) {
+  const legacy = document.canvas.background as Partial<BackgroundLayerConfig> & {
+    type?: "color" | "transparent";
+    color?: string;
+  };
+  const fallbackBounds = {
+    x: 0,
+    y: 0,
+    width: Math.max(1, document.canvas.width || 1080),
+    height: Math.max(1, document.canvas.height || 1080),
+  };
+  document.canvas.background = {
+    id: BACKGROUND_LAYER_ID,
+    name: legacy.name ?? "背景 / Background",
+    type: legacy.type === "transparent" ? "transparent" : "color",
+    ...(legacy.type === "transparent"
+      ? {}
+      : { color: legacy.color ?? "#ffffff" }),
+    visible: legacy.visible ?? true,
+    locked: legacy.locked ?? true,
+    autoSize: legacy.autoSize ?? true,
+    bounds: {
+      ...fallbackBounds,
+      ...(legacy.bounds ?? {}),
+    },
+  } as BackgroundLayerConfig;
+  return document;
+}

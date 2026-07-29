@@ -1,4 +1,7 @@
-import type { ImageToolBoxDocument } from "@imagetoolbox/editor-core";
+import {
+  normalizeDocument,
+  type ImageToolBoxDocument,
+} from "@imagetoolbox/editor-core";
 import {
   BlobReader,
   BlobWriter,
@@ -77,7 +80,7 @@ export async function loadLocalProject(id: string) {
     const blob = await db.get("assets", `${id}:${asset.id}`);
     if (blob) assets.set(asset.id, blob);
   }
-  return { document: record.document, assets };
+  return { document: normalizeDocument(record.document), assets };
 }
 
 export async function setSetting(key: string, value: unknown) {
@@ -138,9 +141,9 @@ export async function importProjectArchive(blob: Blob) {
     JSON.parse(await manifestEntry.getData(new TextWriter())),
   );
   if (manifest.version !== 1) throw new Error("Unsupported project version");
-  const document = JSON.parse(
-    await documentEntry.getData(new TextWriter()),
-  ) as ImageToolBoxDocument;
+  const document = normalizeDocument(
+    JSON.parse(await documentEntry.getData(new TextWriter())) as ImageToolBoxDocument,
+  );
   const assets = new Map<string, Blob>();
   for (const asset of document.assets) {
     const entry = safeEntries.find((candidate) =>

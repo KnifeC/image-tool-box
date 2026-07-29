@@ -1,20 +1,23 @@
 import { computed, reactive, ref, shallowReactive } from "vue";
 import { defineStore } from "pinia";
 import {
+  BACKGROUND_LAYER_ID,
   cloneDocument,
   createDocument,
+  getDocumentBounds,
+  getEffectiveBackgroundBounds,
   HistoryStack,
   makeId,
   normalizeZIndexes,
   SnapshotCommand,
   type ArrowNode,
-  type CanvasConfig,
   type EllipseNode,
   type FreehandNode,
   type ImageNode,
   type ImageToolBoxDocument,
   type LineNode,
   type RectangleNode,
+  type Rect,
   type SceneNode,
   type TextNode,
 } from "@imagetoolbox/editor-core";
@@ -74,11 +77,14 @@ export const useEditorStore = defineStore("editor", () => {
     cropRect: ImageNode["cropRect"];
     frame: { x: number; y: number; width: number; height: number };
   } | null>(null);
+  const cropSelection = ref<Rect | null>(null);
+  const temporaryPan = ref(false);
   const dirty = ref(false);
   const saving = ref(false);
   const toast = ref("");
   const testProjectLoading = ref(false);
   const fitRequest = ref(0);
+  const historyVersion = ref(0);
   const lastCanvasColor = ref(
     document.canvas.background.type === "color"
       ? document.canvas.background.color
@@ -94,8 +100,20 @@ export const useEditorStore = defineStore("editor", () => {
   const selectedImage = computed(() =>
     primaryNode.value?.type === "image" ? primaryNode.value : null,
   );
-  const canUndo = computed(() => history.canUndo);
-  const canRedo = computed(() => history.canRedo);
+  const backgroundSelected = computed(() =>
+    selectedIds.value.includes(BACKGROUND_LAYER_ID),
+  );
+  const backgroundBounds = computed(() => getEffectiveBackgroundBounds(document));
+  const documentBounds = computed(() => getDocumentBounds(document));
+  const effectivePan = computed(() => tool.value === "pan" || temporaryPan.value);
+  const canUndo = computed(() => {
+    historyVersion.value;
+    return history.canUndo;
+  });
+  const canRedo = computed(() => {
+    historyVersion.value;
+    return history.canRedo;
+  });
 
   function mutate(type: string, operation: () => void) {
     const before = cloneDocument(plainClone(document));
@@ -103,6 +121,7 @@ export const useEditorStore = defineStore("editor", () => {
     document.updatedAt = Date.now();
     const after = cloneDocument(plainClone(document));
     history.commit(new SnapshotCommand(type, before, after));
+    historyVersion.value += 1;
     markDirty();
   }
 
@@ -115,7 +134,7 @@ export const useEditorStore = defineStore("editor", () => {
   async function saveLocal() {
     saving.value = true;
     try {
-      await saveLocalProject(plainClone(document), assets);
+      await saveLocalProject(serializableDocument(), assets);
       window.localStorage.setItem(CURRENT_PROJECT_KEY, document.id);
       dirty.value = false;
     } finally {
@@ -146,33 +165,45 @@ export const useEditorStore = defineStore("editor", () => {
   function setCanvasSize(width: number, height: number) {
     const nextWidth = clampCanvasDimension(width);
     const nextHeight = clampCanvasDimension(height);
+    const currentBounds = getEffectiveBackgroundBounds(document);
     if (
-      nextWidth === document.canvas.width &&
-      nextHeight === document.canvas.height
+      !document.canvas.background.autoSize &&
+      nextWidth === currentBounds.width &&
+      nextHeight === currentBounds.height
     ) {
       return;
     }
     mutate("resize-canvas", () => {
       document.canvas.width = nextWidth;
       document.canvas.height = nextHeight;
+      document.canvas.background.autoSize = false;
+      document.canvas.background.bounds = {
+        ...currentBounds,
+        width: nextWidth,
+        height: nextHeight,
+      };
     });
     fitCanvas();
   }
 
   function swapCanvasSize() {
-    setCanvasSize(document.canvas.height, document.canvas.width);
+    const bounds = getEffectiveBackgroundBounds(document);
+    setCanvasSize(bounds.height, bounds.width);
   }
 
   function setCanvasTransparent(transparent: boolean) {
     if (transparent && document.canvas.background.type === "color") {
       lastCanvasColor.value = document.canvas.background.color;
     }
-    const background: CanvasConfig["background"] = transparent
-      ? { type: "transparent" }
-      : { type: "color", color: lastCanvasColor.value };
-    if (document.canvas.background.type === background.type) return;
+    if (
+      (transparent && document.canvas.background.type === "transparent") ||
+      (!transparent && document.canvas.background.type === "color")
+    ) return;
     mutate("change-canvas-background", () => {
-      document.canvas.background = background;
+      const common = backgroundMetadata(document.canvas.background);
+      document.canvas.background = transparent
+        ? { ...common, type: "transparent" }
+        : { ...common, type: "color", color: lastCanvasColor.value };
     });
   }
 
@@ -186,8 +217,50 @@ export const useEditorStore = defineStore("editor", () => {
       return;
     }
     mutate("change-canvas-background", () => {
-      document.canvas.background = { type: "color", color };
+      document.canvas.background = {
+        ...backgroundMetadata(document.canvas.background),
+        type: "color",
+        color,
+      };
     });
+  }
+
+  function setBackgroundAutoSize(autoSize: boolean) {
+    if (document.canvas.background.autoSize === autoSize) return;
+    const currentBounds = getEffectiveBackgroundBounds(document);
+    mutate("change-background-auto-size", () => {
+      document.canvas.background.autoSize = autoSize;
+      document.canvas.background.bounds = currentBounds;
+      document.canvas.width = Math.max(1, Math.round(currentBounds.width));
+      document.canvas.height = Math.max(1, Math.round(currentBounds.height));
+    });
+    fitCanvas();
+  }
+
+  function toggleBackground(key: "visible" | "locked") {
+    mutate(`toggle-background-${key}`, () => {
+      document.canvas.background[key] = !document.canvas.background[key];
+    });
+    fitCanvas();
+  }
+
+  function transformBackground(bounds: Rect) {
+    if (document.canvas.background.autoSize || document.canvas.background.locked) return;
+    const next = {
+      x: bounds.x,
+      y: bounds.y,
+      width: clampCanvasDimension(bounds.width),
+      height: clampCanvasDimension(bounds.height),
+    };
+    mutate("transform-background", () => {
+      document.canvas.background.bounds = next;
+      document.canvas.width = next.width;
+      document.canvas.height = next.height;
+    });
+  }
+
+  function setTemporaryPan(active: boolean) {
+    temporaryPan.value = active;
   }
 
   function fitCanvas() {
@@ -206,6 +279,7 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   async function addImageBlob(blob: Blob, name: string, frame?: Partial<ImageNode>) {
+    const wasEmpty = document.nodes.length === 0;
     const bitmap = await createImageBitmap(blob);
     const id = makeId("asset");
     const nodeId = makeId("image");
@@ -264,6 +338,7 @@ export const useEditorStore = defineStore("editor", () => {
       document.nodes.push(node);
     });
     select(nodeId);
+    if (wasEmpty) fitCanvas();
     return nodeId;
   }
 
@@ -274,8 +349,9 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function addNode(type: Exclude<EditorTool, "select" | "import" | "crop" | "pen" | "highlighter" | "pan">) {
-    const centerX = document.canvas.width / 2;
-    const centerY = document.canvas.height / 2;
+    const bounds = getEffectiveBackgroundBounds(document);
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
     const base = {
       id: makeId(type),
       name: type,
@@ -355,6 +431,51 @@ export const useEditorStore = defineStore("editor", () => {
     tool.value = "select";
   }
 
+  function addLinearNode(
+    type: "line" | "arrow",
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ) {
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const width = Math.max(1, Math.abs(end.x - start.x));
+    const height = Math.max(1, Math.abs(end.y - start.y));
+    const points = [start.x - x, start.y - y, end.x - x, end.y - y];
+    const base = {
+      id: makeId(type),
+      type,
+      name: type === "arrow" ? "箭头 / Arrow" : "直线 / Line",
+      x,
+      y,
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: document.nodes.length,
+      points,
+      stroke: {
+        color: type === "arrow" ? "#f05252" : "#3157f5",
+        width: 4,
+        style: "solid" as const,
+      },
+    };
+    const node: LineNode | ArrowNode =
+      type === "arrow"
+        ? {
+            ...base,
+            type: "arrow",
+            arrowStart: false,
+            arrowEnd: true,
+            pointerLength: 16,
+            pointerWidth: 14,
+          }
+        : { ...base, type: "line" };
+    mutate(`draw-${type}`, () => document.nodes.push(node));
+    select(node.id);
+  }
+
   function addFreehand(points: number[], drawTool: "pen" | "highlighter") {
     if (points.length < 4) return;
     const xs = points.filter((_, index) => index % 2 === 0);
@@ -406,8 +527,10 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function deleteSelected() {
-    if (!selectedIds.value.length) return;
-    const ids = new Set(selectedIds.value);
+    const ids = new Set(
+      selectedIds.value.filter((id) => id !== BACKGROUND_LAYER_ID),
+    );
+    if (!ids.size) return;
     mutate("delete-node", () => {
       document.nodes = document.nodes.filter((node) => !ids.has(node.id));
       normalizeZIndexes(document.nodes);
@@ -449,21 +572,30 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function toggleNode(id: string, key: "visible" | "locked") {
+    if (id === BACKGROUND_LAYER_ID) {
+      toggleBackground(key);
+      return;
+    }
     const node = document.nodes.find((candidate) => candidate.id === id);
     if (node) updateNode(id, { [key]: !node[key] } as Partial<SceneNode>);
   }
 
   function undo() {
     if (history.undo(document)) {
+      historyVersion.value += 1;
       dirty.value = true;
       selectedIds.value = selectedIds.value.filter((id) =>
+        id === BACKGROUND_LAYER_ID ||
         document.nodes.some((node) => node.id === id),
       );
     }
   }
 
   function redo() {
-    if (history.redo(document)) dirty.value = true;
+    if (history.redo(document)) {
+      historyVersion.value += 1;
+      dirty.value = true;
+    }
   }
 
   function enterCrop() {
@@ -477,75 +609,94 @@ export const useEditorStore = defineStore("editor", () => {
       cropRect: plainClone(image.cropRect),
       frame: { x: image.x, y: image.y, width: image.width, height: image.height },
     };
+    cropSelection.value = { x: 0, y: 0, width: image.width, height: image.height };
   }
 
   function applyCropRatio(ratio?: number) {
     const image = selectedImage.value;
-    if (!image) return;
+    const selection = cropSelection.value;
+    if (!image || !selection) return;
     cropRatio.value = ratio;
     if (!ratio) return;
-    const currentRatio = image.cropRect.width / image.cropRect.height;
+    const currentRatio = selection.width / selection.height;
     if (currentRatio > ratio) {
-      const width = image.cropRect.height * ratio;
-      image.cropRect.x += (image.cropRect.width - width) / 2;
-      image.cropRect.width = width;
+      const width = selection.height * ratio;
+      selection.x += (selection.width - width) / 2;
+      selection.width = width;
     } else {
-      const height = image.cropRect.width / ratio;
-      image.cropRect.y += (image.cropRect.height - height) / 2;
-      image.cropRect.height = height;
+      const height = selection.width / ratio;
+      selection.y += (selection.height - height) / 2;
+      selection.height = height;
     }
-    image.height = image.width / ratio;
-    markDirty();
+    cropSelection.value = { ...selection };
   }
 
   function adjustCropInset(percent: number) {
     const image = selectedImage.value;
-    if (!image) return;
-    const asset = document.assets.find((candidate) => candidate.id === image.assetId);
-    if (!asset) return;
+    if (!image || !cropOriginal.value) return;
     const inset = Math.max(0, Math.min(40, percent)) / 100;
     const ratio = cropRatio.value;
-    let width = asset.width * (1 - inset * 2);
-    let height = asset.height * (1 - inset * 2);
+    let width = cropOriginal.value.frame.width * (1 - inset * 2);
+    let height = cropOriginal.value.frame.height * (1 - inset * 2);
     if (ratio) {
       if (width / height > ratio) width = height * ratio;
       else height = width / ratio;
     }
-    image.cropRect = {
-      x: (asset.width - width) / 2,
-      y: (asset.height - height) / 2,
+    cropSelection.value = {
+      x: (cropOriginal.value.frame.width - width) / 2,
+      y: (cropOriginal.value.frame.height - height) / 2,
       width,
       height,
     };
-    image.height = image.width * (height / width);
-    markDirty();
+  }
+
+  function updateCropSelection(selection: Rect) {
+    const image = selectedImage.value;
+    if (!image) return;
+    const width = Math.max(1, Math.min(image.width, selection.width));
+    const height = Math.max(1, Math.min(image.height, selection.height));
+    cropSelection.value = {
+      x: Math.max(0, Math.min(image.width - width, selection.x)),
+      y: Math.max(0, Math.min(image.height - height, selection.y)),
+      width,
+      height,
+    };
   }
 
   function applyCrop() {
     const image = selectedImage.value;
     const original = cropOriginal.value;
-    if (image && original) {
-      const after = cloneDocument(plainClone(document));
-      const before = cloneDocument(plainClone(document));
-      const beforeNode = before.nodes.find((node) => node.id === image.id);
-      if (beforeNode?.type === "image") {
-        beforeNode.cropRect = plainClone(original.cropRect);
-        Object.assign(beforeNode, original.frame);
-      }
-      history.commit(new SnapshotCommand("crop-image", before, after));
-      markDirty();
+    const selection = cropSelection.value;
+    if (image && original && selection) {
+      const sourceScaleX = original.cropRect.width / original.frame.width;
+      const sourceScaleY = original.cropRect.height / original.frame.height;
+      const radians = (image.rotation * Math.PI) / 180;
+      const offsetX =
+        selection.x * Math.cos(radians) - selection.y * Math.sin(radians);
+      const offsetY =
+        selection.x * Math.sin(radians) + selection.y * Math.cos(radians);
+      mutate("crop-image", () => {
+        image.cropRect = {
+          x: original.cropRect.x + selection.x * sourceScaleX,
+          y: original.cropRect.y + selection.y * sourceScaleY,
+          width: selection.width * sourceScaleX,
+          height: selection.height * sourceScaleY,
+        };
+        image.x = original.frame.x + offsetX;
+        image.y = original.frame.y + offsetY;
+        image.width = selection.width;
+        image.height = selection.height;
+      });
     }
     cropOriginal.value = null;
+    cropSelection.value = null;
+    cropRatio.value = undefined;
     tool.value = "select";
   }
 
   function cancelCrop() {
-    const image = selectedImage.value;
-    if (image && cropOriginal.value) {
-      image.cropRect = plainClone(cropOriginal.value.cropRect);
-      Object.assign(image, cropOriginal.value.frame);
-    }
     cropOriginal.value = null;
+    cropSelection.value = null;
     cropRatio.value = undefined;
     tool.value = "select";
   }
@@ -562,11 +713,13 @@ export const useEditorStore = defineStore("editor", () => {
     image.x = centerX - image.width / 2;
     image.y = centerY - image.height / 2;
     markDirty();
+    if (tool.value === "crop") enterCrop();
   }
 
   async function saveProject(platform: ImageToolBoxPlatform) {
     await saveLocal();
-    const blob = await exportProjectArchive(plainClone(document), assets);
+    const serializable = serializableDocument();
+    const blob = await exportProjectArchive(serializable, assets);
     const result = await platform.saveFile({
       suggestedName: `${safeName(document.name)}.ibox`,
       mimeType: "application/x-imagetoolbox-project",
@@ -602,6 +755,7 @@ export const useEditorStore = defineStore("editor", () => {
       refreshAssetUrl(id, asset);
     }
     await saveLocal();
+    fitCanvas();
     showToast("工程已打开 / Project opened");
   }
 
@@ -627,6 +781,15 @@ export const useEditorStore = defineStore("editor", () => {
       filters: [{ name: "Image", extensions: [extension ?? "png"] }],
     });
     showToast("图片已导出 / Image exported");
+  }
+
+  function serializableDocument() {
+    const result = plainClone(document);
+    const bounds = getEffectiveBackgroundBounds(result);
+    result.canvas.width = Math.max(1, Math.round(bounds.width));
+    result.canvas.height = Math.max(1, Math.round(bounds.height));
+    result.canvas.background.bounds = bounds;
+    return result;
   }
 
   async function openTestProject() {
@@ -700,12 +863,18 @@ export const useEditorStore = defineStore("editor", () => {
     selectedNodes,
     primaryNode,
     selectedImage,
+    backgroundSelected,
+    backgroundBounds,
+    documentBounds,
+    effectivePan,
     tool,
     inspectorTab,
     mobilePanel,
     zoom,
     viewOffset,
     cropRatio,
+    cropSelection,
+    temporaryPan,
     dirty,
     saving,
     toast,
@@ -719,9 +888,14 @@ export const useEditorStore = defineStore("editor", () => {
     swapCanvasSize,
     setCanvasTransparent,
     setCanvasBackgroundColor,
+    setBackgroundAutoSize,
+    toggleBackground,
+    transformBackground,
+    setTemporaryPan,
     fitCanvas,
     importFiles,
     addNode,
+    addLinearNode,
     addFreehand,
     updateNode,
     transformNode,
@@ -733,6 +907,7 @@ export const useEditorStore = defineStore("editor", () => {
     redo,
     applyCropRatio,
     adjustCropInset,
+    updateCropSelection,
     applyCrop,
     cancelCrop,
     resetCrop,
@@ -751,4 +926,15 @@ function safeName(name: string) {
 function clampCanvasDimension(value: number) {
   if (!Number.isFinite(value)) return 1;
   return Math.max(1, Math.min(16_384, Math.round(value)));
+}
+
+function backgroundMetadata(background: ImageToolBoxDocument["canvas"]["background"]) {
+  return {
+    id: background.id,
+    name: background.name,
+    visible: background.visible,
+    locked: background.locked,
+    autoSize: background.autoSize,
+    bounds: { ...background.bounds },
+  };
 }

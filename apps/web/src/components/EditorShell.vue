@@ -26,7 +26,12 @@ async function importImages() {
 
 function keyboard(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null;
-  if (target?.matches("input, textarea, select")) return;
+  if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+  if (event.code === "Space") {
+    event.preventDefault();
+    if (!event.repeat) store.setTemporaryPan(true);
+    return;
+  }
   const modifier = event.ctrlKey || event.metaKey;
   if (modifier && event.key.toLowerCase() === "z") {
     event.preventDefault();
@@ -49,7 +54,19 @@ function keyboard(event: KeyboardEvent) {
     store.addNode("rectangle");
   } else if (event.key.toLowerCase() === "p") {
     store.setTool("pen");
+  } else if (event.key === "Escape") {
+    store.tool === "crop" ? store.cancelCrop() : store.setTool("select");
+  } else if (event.key === "Enter" && store.tool === "crop") {
+    store.applyCrop();
   }
+}
+
+function keyboardUp(event: KeyboardEvent) {
+  if (event.code === "Space") store.setTemporaryPan(false);
+}
+
+function releaseTemporaryPan() {
+  store.setTemporaryPan(false);
 }
 
 function handleMenuCommand(command: MenuCommand) {
@@ -75,11 +92,15 @@ function onDrop(event: DragEvent) {
 
 onMounted(() => {
   window.addEventListener("keydown", keyboard);
+  window.addEventListener("keyup", keyboardUp);
+  window.addEventListener("blur", releaseTemporaryPan);
   removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyboard);
+  window.removeEventListener("keyup", keyboardUp);
+  window.removeEventListener("blur", releaseTemporaryPan);
   removeMenuListener?.();
 });
 </script>

@@ -12,7 +12,8 @@ const quality = ref(0.9);
 const scale = ref(1);
 const selectionOnly = ref(false);
 const exporting = ref(false);
-const hasSelection = computed(() => store.selectedIds.length > 0);
+const hasSelection = computed(() => store.selectedNodes.length > 0);
+const exportBounds = computed(() => store.documentBounds);
 
 async function submit() {
   exporting.value = true;
@@ -69,13 +70,17 @@ async function submit() {
           <span>仅导出选中对象 / Selection only</span>
         </label>
         <div class="export-summary">
-          {{ Math.round(store.document.canvas.width * scale) }} ×
-          {{ Math.round(store.document.canvas.height * scale) }} px
+          <template v-if="exportBounds">
+            {{ Math.round(exportBounds.width * scale) }} ×
+            {{ Math.round(exportBounds.height * scale) }} px
+          </template>
+          <template v-else>没有可导出的可见内容</template>
         </div>
         <p
           v-if="
             format === 'image/jpeg' &&
-            store.document.canvas.background.type === 'transparent'
+            (!store.document.canvas.background.visible ||
+              store.document.canvas.background.type === 'transparent')
           "
           class="export-warning"
         >
@@ -86,7 +91,12 @@ async function submit() {
         <button class="secondary-button" type="button" @click="emit('close')">
           取消 / Cancel
         </button>
-        <button class="primary-button" type="button" :disabled="exporting" @click="submit">
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="exporting || !exportBounds"
+          @click="submit"
+        >
           <Download :size="18" />
           {{ exporting ? "正在导出…" : "导出 / Export" }}
         </button>
