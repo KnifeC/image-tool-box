@@ -2,10 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import type Konva from "konva";
 import { FolderOpen } from "lucide-vue-next";
+import { useI18n } from "vue-i18n";
 import { rectFromPoints } from "@imagetoolbox/editor-core";
 import { useEditorStore } from "../stores/editor";
 
 const store = useEditorStore();
+const { t } = useI18n();
 const wrapper = ref<HTMLDivElement | null>(null);
 const stageRef = ref<any>(null);
 const transformerRef = ref<any>(null);
@@ -982,28 +984,33 @@ function createCheckerboardPattern() {
       </v-layer>
     </v-stage>
     <div v-if="!store.nodes.length" class="workspace-empty">
-      <p>画布还是空的</p>
+      <p>{{ t("canvas.empty") }}</p>
       <button
         type="button"
         :disabled="store.testProjectLoading"
         @click="store.openTestProject"
       >
         <FolderOpen :size="19" />
-        {{ store.testProjectLoading ? "正在打开…" : "打开测试工程" }}
+        {{ store.testProjectLoading ? t("canvas.opening") : t("canvas.openTestProject") }}
       </button>
     </div>
     <div v-if="store.tool === 'crop'" class="crop-mode-label">
-      裁剪模式 / Crop mode
+      {{ t("canvas.cropMode") }}
     </div>
     <div v-else-if="store.tool === 'text'" class="crop-mode-label">
-      单击画布放置文本 / Click to place text
+      {{ t("canvas.placeText") }}
     </div>
     <div
       v-else-if="store.tool === 'rectangle' || store.tool === 'ellipse'"
       class="crop-mode-label"
     >
-      拖动绘制{{ store.tool === "rectangle" ? "矩形" : "椭圆" }} · Shift
-      绘制{{ store.tool === "rectangle" ? "正方形" : "圆形" }}
+      {{
+        t("canvas.drawShape", {
+          shape: t(store.tool),
+          lockedShape:
+            store.tool === "rectangle" ? t("canvas.square") : t("canvas.circle"),
+        })
+      }}
     </div>
   </main>
 </template>

@@ -1,4 +1,4 @@
-export const PLATFORM_API_VERSION = 1 as const;
+export const PLATFORM_API_VERSION = 2 as const;
 
 export type PlatformCapabilities = {
   nativeFileDialogs: boolean;
@@ -40,12 +40,17 @@ export type MenuCommand =
   | "save-project"
   | "export"
   | "undo"
-  | "redo";
+  | "redo"
+  | "set-locale-zh"
+  | "set-locale-en";
+
+export type AppLocale = "zh" | "en";
 
 export interface ImageToolBoxPlatform {
   readonly apiVersion: typeof PLATFORM_API_VERSION;
   readonly capabilities: PlatformCapabilities;
   openFiles(options: OpenFileOptions): Promise<OpenedFile[]>;
   saveFile(request: SaveFileRequest): Promise<SaveFileResult>;
+  setLocale(locale: AppLocale): Promise<void>;
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
 }

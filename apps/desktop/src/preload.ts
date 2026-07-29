@@ -4,9 +4,10 @@ import type {
   MenuCommand,
   SaveFileRequest,
 } from "@imagetoolbox/platform-api";
+import { PLATFORM_API_VERSION } from "@imagetoolbox/platform-api";
 
 const electronPlatform: ImageToolBoxPlatform = {
-  apiVersion: 1,
+  apiVersion: PLATFORM_API_VERSION,
   capabilities: {
     nativeFileDialogs: true,
     directFileWrite: true,
@@ -22,6 +23,9 @@ const electronPlatform: ImageToolBoxPlatform = {
   },
   saveFile(request: SaveFileRequest) {
     return ipcRenderer.invoke("files:save", request);
+  },
+  setLocale(locale) {
+    return ipcRenderer.invoke("locale:set", locale);
   },
   onMenuCommand(callback) {
     const listener = (_event: Electron.IpcRendererEvent, command: MenuCommand) =>

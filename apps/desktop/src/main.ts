@@ -13,6 +13,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import type { MenuCommand } from "@imagetoolbox/platform-api";
+import type { AppLocale } from "@imagetoolbox/platform-api";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -46,6 +47,7 @@ const saveSchema = z.object({
 });
 
 let mainWindow: BrowserWindow | null = null;
+let currentLocale: AppLocale = "en";
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -84,39 +86,57 @@ function createWindow() {
 function installMenu() {
   const send = (command: MenuCommand) =>
     mainWindow?.webContents.send("menu:command", command);
+  const zh = currentLocale === "zh";
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
-        label: "文件",
+        label: zh ? "文件" : "File",
         submenu: [
-          { label: "导入图片…", accelerator: "CmdOrCtrl+O", click: () => send("import") },
-          { label: "打开工程…", click: () => send("open-project") },
-          { label: "保存工程…", accelerator: "CmdOrCtrl+S", click: () => send("save-project") },
+          { label: zh ? "导入图片…" : "Import Images…", accelerator: "CmdOrCtrl+O", click: () => send("import") },
+          { label: zh ? "打开工程…" : "Open Project…", click: () => send("open-project") },
+          { label: zh ? "保存工程…" : "Save Project…", accelerator: "CmdOrCtrl+S", click: () => send("save-project") },
           { type: "separator" },
-          { label: "导出图片…", accelerator: "CmdOrCtrl+E", click: () => send("export") },
+          { label: zh ? "导出图片…" : "Export Image…", accelerator: "CmdOrCtrl+E", click: () => send("export") },
           { type: "separator" },
-          { role: "quit", label: "退出" },
+          { role: "quit", label: zh ? "退出" : "Quit" },
         ],
       },
       {
-        label: "编辑",
+        label: zh ? "编辑" : "Edit",
         submenu: [
-          { label: "撤销", accelerator: "CmdOrCtrl+Z", click: () => send("undo") },
-          { label: "重做", accelerator: "CmdOrCtrl+Shift+Z", click: () => send("redo") },
+          { label: zh ? "撤销" : "Undo", accelerator: "CmdOrCtrl+Z", click: () => send("undo") },
+          { label: zh ? "重做" : "Redo", accelerator: "CmdOrCtrl+Shift+Z", click: () => send("redo") },
           { type: "separator" },
-          { role: "cut", label: "剪切" },
-          { role: "copy", label: "复制" },
-          { role: "paste", label: "粘贴" },
+          { role: "cut", label: zh ? "剪切" : "Cut" },
+          { role: "copy", label: zh ? "复制" : "Copy" },
+          { role: "paste", label: zh ? "粘贴" : "Paste" },
         ],
       },
       {
-        label: "视图",
+        label: zh ? "视图" : "View",
         submenu: [
-          { role: "reload", label: "重新载入" },
-          { role: "togglefullscreen", label: "全屏" },
+          { role: "reload", label: zh ? "重新载入" : "Reload" },
+          { role: "togglefullscreen", label: zh ? "全屏" : "Toggle Full Screen" },
           ...(!app.isPackaged
-            ? ([{ role: "toggleDevTools", label: "开发者工具" }] as Electron.MenuItemConstructorOptions[])
+            ? ([{ role: "toggleDevTools", label: zh ? "开发者工具" : "Developer Tools" }] as Electron.MenuItemConstructorOptions[])
             : []),
+        ],
+      },
+      {
+        label: zh ? "语言" : "Language",
+        submenu: [
+          {
+            label: "中文",
+            type: "radio",
+            checked: zh,
+            click: () => send("set-locale-zh"),
+          },
+          {
+            label: "English",
+            type: "radio",
+            checked: !zh,
+            click: () => send("set-locale-en"),
+          },
         ],
       },
     ]),
@@ -134,6 +154,15 @@ function validateSender(event: Electron.IpcMainInvokeEvent) {
 }
 
 function installIpc() {
+  ipcMain.handle("locale:set", (event, locale: unknown) => {
+    validateSender(event);
+    if (locale !== "zh" && locale !== "en") {
+      throw new Error("Unsupported locale");
+    }
+    currentLocale = locale;
+    installMenu();
+  });
+
   ipcMain.handle("files:open", async (event, rawOptions) => {
     validateSender(event);
     const options = openSchema.parse(rawOptions);
@@ -187,6 +216,7 @@ function mimeForExtension(extension: string) {
 }
 
 app.whenReady().then(async () => {
+  currentLocale = app.getLocale().toLowerCase().startsWith("zh") ? "zh" : "en";
   const rendererRoot = path.resolve(process.resourcesPath, "renderer");
   protocol.handle("app", (request) => {
     const url = new URL(request.url);

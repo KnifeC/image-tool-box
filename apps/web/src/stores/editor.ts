@@ -177,6 +177,14 @@ export const useEditorStore = defineStore("editor", () => {
     if (next === "crop") enterCrop();
   }
 
+  function renameDocument(name: string) {
+    const nextName = name.trim();
+    if (!nextName || nextName === document.name) return;
+    mutate("rename-document", () => {
+      document.name = nextName;
+    });
+  }
+
   function updateToolPreset<K extends CreationTool>(
     targetTool: K,
     patch: Partial<ToolPresets[K]>,
@@ -1124,6 +1132,7 @@ export const useEditorStore = defineStore("editor", () => {
     canUndo,
     canRedo,
     setTool,
+    renameDocument,
     updateToolPreset,
     resetToolPreset,
     select,

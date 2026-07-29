@@ -13,28 +13,29 @@ import {
   Type,
 } from "lucide-vue-next";
 import type { Component } from "vue";
+import { useI18n } from "vue-i18n";
 import { useEditorStore, type EditorTool } from "../stores/editor";
 
 const store = useEditorStore();
+const { t } = useI18n();
 const emit = defineEmits<{ import: [] }>();
 
 const tools: Array<{
   id: EditorTool;
-  label: string;
-  mobileLabel: string;
+  shortcut?: string;
   icon: Component;
 }> = [
-  { id: "select", label: "选择", mobileLabel: "选择", icon: MousePointer2 },
-  { id: "import", label: "导入图片", mobileLabel: "导入", icon: ImagePlus },
-  { id: "crop", label: "裁剪", mobileLabel: "裁剪", icon: Crop },
-  { id: "text", label: "文本", mobileLabel: "文本", icon: Type },
-  { id: "rectangle", label: "矩形", mobileLabel: "矩形", icon: Square },
-  { id: "ellipse", label: "椭圆", mobileLabel: "椭圆", icon: Circle },
-  { id: "line", label: "直线", mobileLabel: "直线", icon: Minus },
-  { id: "arrow", label: "箭头", mobileLabel: "箭头", icon: ArrowUpRight },
-  { id: "pen", label: "画笔", mobileLabel: "画笔", icon: PenLine },
-  { id: "highlighter", label: "荧光笔", mobileLabel: "标记", icon: Highlighter },
-  { id: "pan", label: "平移", mobileLabel: "平移", icon: Hand },
+  { id: "select", shortcut: "select", icon: MousePointer2 },
+  { id: "import", shortcut: "import", icon: ImagePlus },
+  { id: "crop", shortcut: "crop", icon: Crop },
+  { id: "text", shortcut: "text", icon: Type },
+  { id: "rectangle", shortcut: "rectangle", icon: Square },
+  { id: "ellipse", icon: Circle },
+  { id: "line", icon: Minus },
+  { id: "arrow", icon: ArrowUpRight },
+  { id: "pen", shortcut: "pen", icon: PenLine },
+  { id: "highlighter", icon: Highlighter },
+  { id: "pan", shortcut: "pan", icon: Hand },
 ];
 
 function activate(id: EditorTool) {
@@ -47,19 +48,26 @@ function activate(id: EditorTool) {
 </script>
 
 <template>
-  <nav class="toolrail" aria-label="编辑工具">
+  <nav class="toolrail" :aria-label="t('mobile.tools')">
     <button
       v-for="item in tools"
       :key="item.id"
       class="tool-button"
       :class="{ active: store.tool === item.id }"
       type="button"
-      :title="item.label"
+      :title="
+        item.shortcut
+          ? `${t(item.id)} (${t(`shortcuts.${item.shortcut}`)})`
+          : t(item.id)
+      "
       @click="activate(item.id)"
     >
       <component :is="item.icon" :size="23" :stroke-width="1.8" />
-      <span class="desktop-tool-label">{{ item.label }}</span>
-      <span class="mobile-tool-label">{{ item.mobileLabel }}</span>
+      <span class="desktop-tool-label">{{ t(item.id) }}</span>
+      <span class="mobile-tool-label">{{ t(item.id) }}</span>
+      <kbd v-if="item.shortcut && item.shortcut !== 'import'" class="tool-shortcut">
+        {{ t(`shortcuts.${item.shortcut}`) }}
+      </kbd>
     </button>
   </nav>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   ArrowDown,
   ArrowUp,
@@ -27,6 +28,7 @@ import { isCreationTool } from "../tool-presets";
 import ToolOptionsPanel from "./ToolOptionsPanel.vue";
 
 const store = useEditorStore();
+const { t } = useI18n();
 const node = computed(() => store.primaryNode);
 const activeCreationTool = computed(() =>
   isCreationTool(store.tool) ? store.tool : null,
@@ -361,35 +363,35 @@ function applyCanvasSize() {
   store.setCanvasSize(canvasWidthDraft.value, canvasHeightDraft.value);
 }
 
-const ratioOptions = [
-  { label: "自由", value: undefined },
-  { label: "原图", value: 0 },
+const ratioOptions = computed(() => [
+  { label: t("inspector.free"), value: undefined },
+  { label: t("inspector.original"), value: 0 },
   { label: "1:1", value: 1 },
   { label: "4:3", value: 4 / 3 },
   { label: "3:4", value: 3 / 4 },
   { label: "16:9", value: 16 / 9 },
   { label: "9:16", value: 9 / 16 },
-];
+]);
 
-const canvasPresets = [
-  { label: "方形", detail: "1080 × 1080", width: 1080, height: 1080 },
-  { label: "横屏 16:9", detail: "1920 × 1080", width: 1920, height: 1080 },
-  { label: "竖屏 9:16", detail: "1080 × 1920", width: 1080, height: 1920 },
-  { label: "社交媒体 4:5", detail: "1080 × 1350", width: 1080, height: 1350 },
-];
+const canvasPresets = computed(() => [
+  { label: t("inspector.square"), detail: "1080 × 1080", width: 1080, height: 1080 },
+  { label: t("inspector.landscape"), detail: "1920 × 1080", width: 1920, height: 1080 },
+  { label: t("inspector.portrait"), detail: "1080 × 1920", width: 1080, height: 1920 },
+  { label: t("inspector.social"), detail: "1080 × 1350", width: 1080, height: 1350 },
+]);
 </script>
 
 <template>
   <aside
     class="inspector"
     :class="{ 'mobile-open': store.mobilePanel !== null }"
-    aria-label="属性和图层"
+    :aria-label="t('inspector.label')"
   >
     <button
       v-if="store.mobilePanel"
       class="mobile-panel-close"
       type="button"
-      aria-label="关闭面板"
+      :aria-label="t('inspector.close')"
       @click="store.mobilePanel = null"
     >
       <X :size="22" />
@@ -397,11 +399,11 @@ const canvasPresets = [
 
     <template v-if="store.tool === 'crop' && store.selectedImage">
       <div class="inspector-heading">
-        <h2>裁剪 / Crop</h2>
+        <h2>{{ t("inspector.crop") }}</h2>
       </div>
       <div class="panel-scroll crop-panel">
         <section class="property-section">
-          <h3>比例 / Ratio</h3>
+          <h3>{{ t("inspector.ratio") }}</h3>
           <div class="ratio-grid">
             <button
               v-for="ratio in ratioOptions"
@@ -424,10 +426,10 @@ const canvasPresets = [
           </div>
         </section>
         <section class="property-section">
-          <h3>裁剪区域 / Crop area</h3>
+          <h3>{{ t("inspector.cropArea") }}</h3>
           <div class="field-grid">
             <label>
-              <span>宽 / W</span>
+              <span>{{ t("inspector.width") }}</span>
               <input
                 :value="Math.round(store.cropSelection?.width ?? 0)"
                 type="number"
@@ -435,7 +437,7 @@ const canvasPresets = [
               />
             </label>
             <label>
-              <span>高 / H</span>
+              <span>{{ t("inspector.height") }}</span>
               <input
                 :value="Math.round(store.cropSelection?.height ?? 0)"
                 type="number"
@@ -445,7 +447,7 @@ const canvasPresets = [
           </div>
         </section>
         <section class="property-section">
-          <h3>缩放图片内容</h3>
+          <h3>{{ t("inspector.zoomContent") }}</h3>
           <input
             class="full-slider"
             type="range"
@@ -454,13 +456,13 @@ const canvasPresets = [
             value="0"
             @input="store.adjustCropInset(numberValue($event))"
           />
-          <p class="crop-help">拖动滑块调整可见区域。裁剪不会修改原始图片内容。</p>
+          <p class="crop-help">{{ t("inspector.cropHelp") }}</p>
         </section>
       </div>
       <div class="crop-actions">
-        <button type="button" @click="store.resetCrop">重置</button>
-        <button type="button" @click="store.cancelCrop">取消</button>
-        <button class="primary" type="button" @click="store.applyCrop">完成</button>
+        <button type="button" @click="store.resetCrop">{{ t("inspector.reset") }}</button>
+        <button type="button" @click="store.cancelCrop">{{ t("inspector.cancel") }}</button>
+        <button class="primary" type="button" @click="store.applyCrop">{{ t("inspector.done") }}</button>
       </div>
     </template>
 
@@ -482,7 +484,7 @@ const canvasPresets = [
             aria-controls="inspector-properties"
             @click="propertiesOpen = !propertiesOpen"
           >
-            <span>属性 / Properties</span>
+            <span>{{ t("inspector.properties") }}</span>
             <ChevronDown :size="18" :class="{ rotated: propertiesOpen }" />
           </button>
 
@@ -494,7 +496,7 @@ const canvasPresets = [
         <ToolOptionsPanel v-if="activeCreationTool" />
         <template v-else-if="node">
           <section class="property-section">
-            <h3>位置 / Position</h3>
+            <h3>{{ t("inspector.position") }}</h3>
             <div class="field-grid">
               <label>
                 <span>X</span>
@@ -515,10 +517,10 @@ const canvasPresets = [
             </div>
           </section>
           <section class="property-section">
-            <h3>大小 / Size</h3>
+            <h3>{{ t("inspector.size") }}</h3>
             <div class="field-grid">
               <label>
-                <span>宽 / W</span>
+                <span>{{ t("inspector.width") }}</span>
                 <input
                   :value="Math.round(node.width)"
                   type="number"
@@ -527,7 +529,7 @@ const canvasPresets = [
                 />
               </label>
               <label>
-                <span>高 / H</span>
+                <span>{{ t("inspector.height") }}</span>
                 <input
                   :value="Math.round(node.height)"
                   type="number"
@@ -539,7 +541,7 @@ const canvasPresets = [
           </section>
           <section class="property-section inline-section">
             <label>
-              <span>旋转 / Rotation</span>
+              <span>{{ t("inspector.rotation") }}</span>
               <input
                 :value="Math.round(node.rotation)"
                 type="number"
@@ -549,7 +551,7 @@ const canvasPresets = [
           </section>
           <section class="property-section">
             <div class="slider-heading">
-              <h3>不透明度 / Opacity</h3>
+              <h3>{{ t("inspector.opacity") }}</h3>
               <output>{{ Math.round(node.opacity * 100) }}%</output>
             </div>
             <input
@@ -567,7 +569,7 @@ const canvasPresets = [
 
           <section v-if="node.type === 'image'" class="property-section">
             <div class="toggle-row">
-              <h3>边框 / Border</h3>
+              <h3>{{ t("inspector.border") }}</h3>
               <input
                 :checked="node.border.enabled"
                 type="checkbox"
@@ -592,7 +594,7 @@ const canvasPresets = [
               <span>px</span>
             </div>
             <label class="single-field">
-              <span>圆角 / Corner radius</span>
+              <span>{{ t("inspector.cornerRadius") }}</span>
               <input
                 :value="node.cornerRadius"
                 type="number"
@@ -607,7 +609,7 @@ const canvasPresets = [
             class="property-section"
           >
             <div class="toggle-row">
-              <h3>描边 / Stroke</h3>
+              <h3>{{ t("inspector.stroke") }}</h3>
               <input
                 :checked="node.style.stroke.enabled"
                 type="checkbox"
@@ -618,7 +620,7 @@ const canvasPresets = [
               <input
                 :value="node.style.stroke.color"
                 type="color"
-                aria-label="描边颜色 / Stroke color"
+                :aria-label="t('inspector.strokeColor')"
                 :disabled="!node.style.stroke.enabled"
                 @input="previewShape('stroke', 'color', ($event.target as HTMLInputElement).value)"
                 @change="finishPreview"
@@ -634,7 +636,7 @@ const canvasPresets = [
               <span>px</span>
             </div>
             <div class="toggle-row property-subrow">
-              <h3>填充 / Fill</h3>
+              <h3>{{ t("inspector.fill") }}</h3>
               <input
                 :checked="node.style.fill.enabled"
                 type="checkbox"
@@ -645,7 +647,7 @@ const canvasPresets = [
               <input
                 :value="node.style.fill.color"
                 type="color"
-                aria-label="填充颜色 / Fill color"
+                :aria-label="t('inspector.fillColor')"
                 :disabled="!node.style.fill.enabled"
                 @input="previewShape('fill', 'color', ($event.target as HTMLInputElement).value)"
                 @change="finishPreview"
@@ -657,7 +659,7 @@ const canvasPresets = [
                 min="0"
                 max="1"
                 step="0.01"
-                aria-label="填充不透明度 / Fill opacity"
+                :aria-label="t('inspector.fillOpacity')"
                 :disabled="!node.style.fill.enabled"
                 @input="previewShape('fill', 'opacity', numberValue($event))"
                 @change="finishPreview"
@@ -672,14 +674,14 @@ const canvasPresets = [
             class="property-section"
           >
             <div class="slider-heading">
-              <h3>线条 / Line</h3>
+              <h3>{{ t("inspector.line") }}</h3>
               <output>{{ Math.round(node.stroke.width) }} px</output>
             </div>
             <div class="style-row">
               <input
                 :value="node.stroke.color"
                 type="color"
-                aria-label="线条颜色 / Line color"
+                :aria-label="t('inspector.lineColor')"
                 @input="previewLinear('color', ($event.target as HTMLInputElement).value)"
                 @change="finishPreview"
                 @blur="finishPreview"
@@ -690,7 +692,7 @@ const canvasPresets = [
                 min="1"
                 max="40"
                 step="1"
-                aria-label="线条宽度 / Line width"
+                :aria-label="t('inspector.lineWidth')"
                 @input="previewLinear('width', numberValue($event))"
                 @change="finishPreview"
                 @blur="finishPreview"
@@ -700,14 +702,14 @@ const canvasPresets = [
 
           <section v-if="node.type === 'freehand'" class="property-section">
             <div class="slider-heading">
-              <h3>笔触 / Stroke</h3>
+              <h3>{{ t("inspector.stroke") }}</h3>
               <output>{{ Math.round(node.strokeWidth) }} px</output>
             </div>
             <div class="style-row">
               <input
                 :value="node.color"
                 type="color"
-                aria-label="笔触颜色 / Stroke color"
+                :aria-label="t('inspector.strokeColor')"
                 @input="previewFreehand('color', ($event.target as HTMLInputElement).value)"
                 @change="finishPreview"
                 @blur="finishPreview"
@@ -718,7 +720,7 @@ const canvasPresets = [
                 min="1"
                 max="80"
                 step="1"
-                aria-label="笔触宽度 / Stroke width"
+                :aria-label="t('inspector.strokeWidth')"
                 @input="previewFreehand('strokeWidth', numberValue($event))"
                 @change="finishPreview"
                 @blur="finishPreview"
@@ -728,7 +730,7 @@ const canvasPresets = [
 
           <section v-if="node.type === 'text'" class="property-section">
             <label class="text-field">
-              <span>文字 / Text</span>
+              <span>{{ t("inspector.text") }}</span>
               <textarea
                 ref="textInputRef"
                 :value="node.text"
@@ -738,7 +740,7 @@ const canvasPresets = [
             </label>
             <div class="field-grid">
               <label>
-                <span>字号</span>
+                <span>{{ t("inspector.fontSize") }}</span>
                 <input
                   :value="node.fontSize"
                   type="number"
@@ -746,11 +748,11 @@ const canvasPresets = [
                 />
               </label>
               <label>
-                <span>颜色</span>
+                <span>{{ t("inspector.color") }}</span>
                 <input
                   :value="node.color"
                   type="color"
-                  aria-label="文字颜色 / Text color"
+                  :aria-label="t('inspector.textColor')"
                   @input="preview({ color: ($event.target as HTMLInputElement).value } as Partial<TextNode>)"
                   @change="finishPreview"
                   @blur="finishPreview"
@@ -761,10 +763,10 @@ const canvasPresets = [
         </template>
         <div v-else class="canvas-settings">
           <section class="property-section">
-            <h3>背景图层 / Background layer</h3>
+            <h3>{{ t("inspector.backgroundLayer") }}</h3>
             <div class="background-toggle-list">
               <label>
-                <span>显示背景 / Visible</span>
+                <span>{{ t("inspector.visible") }}</span>
                 <input
                   :checked="store.document.canvas.background.visible"
                   type="checkbox"
@@ -772,7 +774,7 @@ const canvasPresets = [
                 />
               </label>
               <label>
-                <span>锁定背景 / Locked</span>
+                <span>{{ t("inspector.locked") }}</span>
                 <input
                   :checked="store.document.canvas.background.locked"
                   type="checkbox"
@@ -780,7 +782,7 @@ const canvasPresets = [
                 />
               </label>
               <label>
-                <span>自适应大小 / Auto size</span>
+                <span>{{ t("inspector.autoSize") }}</span>
                 <input
                   :checked="store.document.canvas.background.autoSize"
                   type="checkbox"
@@ -795,10 +797,10 @@ const canvasPresets = [
             </div>
           </section>
           <section class="property-section">
-            <h3>背景尺寸 / Background size</h3>
+            <h3>{{ t("inspector.backgroundSize") }}</h3>
             <div class="background-toggle-list background-size-toggle">
               <label>
-                <span>在画布中拖动/缩放 / Drag/resize on canvas</span>
+                <span>{{ t("inspector.transformBackground") }}</span>
                 <input
                   :checked="
                     store.document.canvas.background.transformEnabled
@@ -816,8 +818,8 @@ const canvasPresets = [
             <p class="background-transform-help">
               {{
                 store.document.canvas.background.locked
-                  ? "背景已锁定，尺寸、拖动和缩放均不可修改。 / Background geometry is locked."
-                  : "可直接拖动背景，并使用控制点调整大小。 / Drag the background or resize it with the handles."
+                  ? t("inspector.transformBackgroundLockedHint")
+                  : t("inspector.transformBackgroundHint")
               }}
             </p>
             <div class="canvas-preset-grid">
@@ -839,7 +841,7 @@ const canvasPresets = [
             </div>
             <div class="field-grid">
               <label>
-                <span>画布宽度 / Width</span>
+                <span>{{ t("inspector.canvasWidth") }}</span>
                 <input
                   v-model.number="canvasWidthDraft"
                   type="number"
@@ -849,7 +851,7 @@ const canvasPresets = [
                 />
               </label>
               <label>
-                <span>画布高度 / Height</span>
+                <span>{{ t("inspector.canvasHeight") }}</span>
                 <input
                   v-model.number="canvasHeightDraft"
                   type="number"
@@ -865,25 +867,25 @@ const canvasPresets = [
                 :disabled="backgroundSizeDisabled"
                 @click="applyCanvasSize"
               >
-                应用尺寸 / Apply
+                {{ t("inspector.apply") }}
               </button>
               <button
                 type="button"
                 :disabled="backgroundSizeDisabled"
                 @click="store.swapCanvasSize"
               >
-                交换宽高 / Swap
+                {{ t("inspector.swap") }}
               </button>
             </div>
           </section>
 
           <section class="property-section">
             <div class="toggle-row">
-              <h3>透明背景 / Transparent</h3>
+              <h3>{{ t("inspector.transparent") }}</h3>
               <input
                 :checked="store.document.canvas.background.type === 'transparent'"
                 type="checkbox"
-                aria-label="透明背景"
+                :aria-label="t('inspector.transparent')"
                 @change="
                   store.setCanvasTransparent(
                     ($event.target as HTMLInputElement).checked,
@@ -898,12 +900,12 @@ const canvasPresets = [
                   store.document.canvas.background.type === 'transparent',
               }"
             >
-              <span>背景颜色 / Background</span>
+              <span>{{ t("inspector.background") }}</span>
               <span>
                 <input
                   :value="canvasColor"
                   type="color"
-                  aria-label="画布背景颜色"
+                  :aria-label="t('inspector.background')"
                   :disabled="
                     store.document.canvas.background.type === 'transparent'
                   "
@@ -928,7 +930,7 @@ const canvasPresets = [
           class="panel-resizer"
           data-testid="inspector-panel-resizer"
           role="separator"
-          aria-label="调整属性和图层面板高度"
+          :aria-label="t('inspector.resizePanels')"
           aria-orientation="horizontal"
           aria-valuemin="20"
           aria-valuemax="80"
@@ -954,7 +956,7 @@ const canvasPresets = [
             aria-controls="inspector-layers"
             @click="layersOpen = !layersOpen"
           >
-            <span>图层 / Layers</span>
+            <span>{{ t("inspector.layers") }}</span>
             <ChevronDown :size="18" :class="{ rotated: layersOpen }" />
           </button>
 
@@ -964,7 +966,7 @@ const canvasPresets = [
             class="panel-scroll layers-panel inspector-section-content"
           >
         <div class="layers-heading">
-          <span>{{ store.nodes.length + 1 }} 个图层</span>
+          <span>{{ t("inspector.layerCount", { count: store.nodes.length + 1 }) }}</span>
           <button type="button" :disabled="!node" @click="store.deleteSelected">
             <Trash2 :size="16" />
           </button>
@@ -983,13 +985,13 @@ const canvasPresets = [
           }"
           type="button"
           :data-layer-id="layer.id"
-          :aria-label="`${layer.name}，拖动可调整图层顺序`"
+          :aria-label="t('inspector.layerDragLabel', { name: layer.name })"
           @pointerdown="prepareLayerPointerDrag($event, layer.id)"
           @click="handleLayerClick(layer.id, $event.shiftKey)"
         >
           <span
             class="layer-drag-handle"
-            title="拖动调整图层顺序"
+            :title="t('inspector.dragLayer')"
           >
             <GripVertical :size="15" aria-hidden="true" />
           </span>
@@ -1048,21 +1050,21 @@ const canvasPresets = [
             type="button"
             data-testid="move-layer-up"
             :disabled="!canMoveLayerUp"
-            title="将当前图层上移一层"
+            :title="t('inspector.moveUpTitle')"
             @click="store.reorderNode(node.id, 1)"
           >
             <ArrowUp :size="16" />
-            上移
+            {{ t("inspector.moveUp") }}
           </button>
           <button
             type="button"
             data-testid="move-layer-down"
             :disabled="!canMoveLayerDown"
-            title="将当前图层下移一层"
+            :title="t('inspector.moveDownTitle')"
             @click="store.reorderNode(node.id, -1)"
           >
             <ArrowDown :size="16" />
-            下移
+            {{ t("inspector.moveDown") }}
           </button>
         </div>
           </div>

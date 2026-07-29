@@ -52,6 +52,7 @@ const webPlatform: ImageToolBoxPlatform = {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     return { saved: true };
   },
+  async setLocale() {},
   onMenuCommand() {
     return () => {};
   },

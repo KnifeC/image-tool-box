@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { inject } from "vue";
+import { inject, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
-  ChevronDown,
   Download,
   FileImage,
   FolderOpen,
   Languages,
+  Pencil,
   Redo2,
   Save,
   Undo2,
@@ -18,7 +18,10 @@ defineProps<{ onExport: () => void }>();
 
 const store = useEditorStore();
 const platform = inject(platformKey)!;
-const { locale } = useI18n();
+const { locale, t } = useI18n();
+const renaming = ref(false);
+const nameDraft = ref("");
+const nameInput = ref<HTMLInputElement | null>(null);
 
 async function importImages() {
   const files = await platform.openFiles({
@@ -30,7 +33,24 @@ async function importImages() {
 
 function toggleLocale() {
   locale.value = locale.value === "zh" ? "en" : "zh";
-  localStorage.setItem("imagetoolbox.locale", locale.value);
+}
+
+async function startRename() {
+  nameDraft.value = store.document.name;
+  renaming.value = true;
+  await nextTick();
+  nameInput.value?.focus();
+  nameInput.value?.select();
+}
+
+function commitRename() {
+  if (!renaming.value) return;
+  store.renameDocument(nameDraft.value);
+  renaming.value = false;
+}
+
+function cancelRename() {
+  renaming.value = false;
 }
 </script>
 
@@ -43,9 +63,27 @@ function toggleLocale() {
       <strong>ImageToolBox</strong>
     </div>
 
-    <button class="document-name" type="button">
+    <form v-if="renaming" class="document-name-editor" @submit.prevent="commitRename">
+      <input
+        ref="nameInput"
+        v-model="nameDraft"
+        :aria-label="t('topbar.projectName')"
+        maxlength="120"
+        @blur="commitRename"
+        @keydown.enter.prevent="commitRename"
+        @keydown.esc.prevent="cancelRename"
+      />
+    </form>
+    <button
+      v-else
+      class="document-name"
+      type="button"
+      :title="t('topbar.renameHint')"
+      :aria-label="`${t('topbar.rename')}: ${store.document.name}`"
+      @click="startRename"
+    >
       <span>{{ store.document.name }}</span>
-      <ChevronDown :size="15" />
+      <Pencil :size="14" />
     </button>
 
     <div class="topbar-spacer"></div>
@@ -55,53 +93,67 @@ function toggleLocale() {
         class="command"
         type="button"
         :disabled="!store.canUndo"
-        title="撤销 / Undo"
+        :title="`${t('topbar.undo')} (${t('shortcuts.undo')})`"
         @click="store.undo"
       >
         <Undo2 :size="20" />
-        <span>撤销</span>
+        <span>{{ t("topbar.undo") }}</span>
       </button>
       <button
         class="command"
         type="button"
         :disabled="!store.canRedo"
-        title="重做 / Redo"
+        :title="`${t('topbar.redo')} (${t('shortcuts.redo')})`"
         @click="store.redo"
       >
         <Redo2 :size="20" />
-        <span>重做</span>
+        <span>{{ t("topbar.redo") }}</span>
       </button>
     </div>
 
     <div class="command-group command-files">
-      <button class="command" type="button" @click="importImages">
+      <button
+        class="command"
+        type="button"
+        :title="`${t('import')} (${t('shortcuts.import')})`"
+        @click="importImages"
+      >
         <FileImage :size="20" />
-        <span>导入</span>
+        <span>{{ t("topbar.import") }}</span>
       </button>
       <button class="command command-open" type="button" @click="store.openProject(platform)">
         <FolderOpen :size="20" />
-        <span>打开</span>
+        <span>{{ t("topbar.open") }}</span>
       </button>
-      <button class="command" type="button" @click="store.saveProject(platform)">
+      <button
+        class="command"
+        type="button"
+        :title="`${t('topbar.save')} (${t('shortcuts.save')})`"
+        @click="store.saveProject(platform)"
+      >
         <Save :size="20" />
-        <span>保存项目</span>
+        <span>{{ t("topbar.save") }}</span>
       </button>
     </div>
 
     <button
       class="icon-command locale-command"
       type="button"
-      title="切换语言 / Switch language"
+      :title="t('topbar.switchLanguage')"
       @click="toggleLocale"
     >
       <Languages :size="19" />
       <span>{{ locale === "zh" ? "中" : "EN" }}</span>
     </button>
 
-    <button class="export-button" type="button" @click="onExport">
+    <button
+      class="export-button"
+      type="button"
+      :title="`${t('topbar.export')} (${t('shortcuts.export')})`"
+      @click="onExport"
+    >
       <Download :size="20" />
-      <span>导出 / Export</span>
+      <span>{{ t("topbar.export") }}</span>
     </button>
   </header>
 </template>
-

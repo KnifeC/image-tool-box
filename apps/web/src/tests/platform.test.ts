@@ -43,6 +43,7 @@ describe("platform resolution", () => {
       },
       openFiles: vi.fn().mockResolvedValue([]),
       saveFile: vi.fn().mockResolvedValue({ saved: true }),
+      setLocale: vi.fn().mockResolvedValue(undefined),
       onMenuCommand: vi.fn().mockReturnValue(() => {}),
     };
     Object.defineProperty(globalThis, "window", {

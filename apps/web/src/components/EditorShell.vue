@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { inject, onBeforeUnmount, onMounted, ref } from "vue";
+import { inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Layers3, SlidersHorizontal } from "lucide-vue-next";
 import type { MenuCommand } from "@imagetoolbox/platform-api";
 import { platformKey } from "../platform";
@@ -13,6 +14,7 @@ import TopBar from "./TopBar.vue";
 
 const store = useEditorStore();
 const platform = inject(platformKey)!;
+const { locale, t } = useI18n();
 const exportOpen = ref(false);
 let removeMenuListener: (() => void) | undefined;
 
@@ -42,6 +44,12 @@ function keyboard(event: KeyboardEvent) {
   } else if (modifier && event.key.toLowerCase() === "s") {
     event.preventDefault();
     void store.saveProject(platform);
+  } else if (modifier && event.key.toLowerCase() === "o") {
+    event.preventDefault();
+    void importImages();
+  } else if (modifier && event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    exportOpen.value = true;
   } else if (event.key === "Delete" || event.key === "Backspace") {
     store.deleteSelected();
   } else if (event.key.toLowerCase() === "v") {
@@ -76,6 +84,8 @@ function handleMenuCommand(command: MenuCommand) {
   if (command === "export") exportOpen.value = true;
   if (command === "undo") store.undo();
   if (command === "redo") store.redo();
+  if (command === "set-locale-zh") locale.value = "zh";
+  if (command === "set-locale-en") locale.value = "en";
 }
 
 function onDrop(event: DragEvent) {
@@ -96,6 +106,16 @@ onMounted(() => {
   window.addEventListener("blur", releaseTemporaryPan);
   removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
+
+watch(
+  locale,
+  (nextLocale) => {
+    const supportedLocale = nextLocale === "zh" ? "zh" : "en";
+    window.localStorage.setItem("imagetoolbox.locale", supportedLocale);
+    void platform.setLocale(supportedLocale);
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyboard);
@@ -118,11 +138,11 @@ onBeforeUnmount(() => {
     <div class="mobile-panel-actions">
       <button type="button" @click="store.mobilePanel = 'properties'">
         <SlidersHorizontal :size="19" />
-        属性
+        {{ t("mobile.properties") }}
       </button>
       <button type="button" @click="store.mobilePanel = 'layers'">
         <Layers3 :size="19" />
-        图层
+        {{ t("mobile.layers") }}
       </button>
     </div>
 
