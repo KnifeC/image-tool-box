@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   ArrowDown,
   ArrowUp,
@@ -20,6 +20,21 @@ import { useEditorStore } from "../stores/editor";
 
 const store = useEditorStore();
 const node = computed(() => store.primaryNode);
+const canvasColor = computed(() =>
+  store.document.canvas.background.type === "color"
+    ? store.document.canvas.background.color
+    : "#ffffff",
+);
+const canvasWidthDraft = ref(store.document.canvas.width);
+const canvasHeightDraft = ref(store.document.canvas.height);
+
+watch(
+  () => [store.document.canvas.width, store.document.canvas.height],
+  ([width, height]) => {
+    canvasWidthDraft.value = width ?? 1;
+    canvasHeightDraft.value = height ?? 1;
+  },
+);
 
 function numberValue(event: Event) {
   return Number((event.target as HTMLInputElement).value);
@@ -51,6 +66,10 @@ function updateText(key: keyof TextNode, value: unknown) {
   update({ [key]: value } as Partial<TextNode>);
 }
 
+function applyCanvasSize() {
+  store.setCanvasSize(canvasWidthDraft.value, canvasHeightDraft.value);
+}
+
 const ratioOptions = [
   { label: "自由", value: undefined },
   { label: "原图", value: 0 },
@@ -59,6 +78,13 @@ const ratioOptions = [
   { label: "3:4", value: 3 / 4 },
   { label: "16:9", value: 16 / 9 },
   { label: "9:16", value: 9 / 16 },
+];
+
+const canvasPresets = [
+  { label: "方形", detail: "1080 × 1080", width: 1080, height: 1080 },
+  { label: "横屏 16:9", detail: "1920 × 1080", width: 1920, height: 1080 },
+  { label: "竖屏 9:16", detail: "1080 × 1920", width: 1080, height: 1920 },
+  { label: "社交媒体 4:5", detail: "1080 × 1350", width: 1080, height: 1350 },
 ];
 </script>
 
@@ -352,10 +378,95 @@ const ratioOptions = [
             </div>
           </section>
         </template>
-        <div v-else class="empty-inspector">
-          <div class="empty-icon"></div>
-          <h3>未选择对象</h3>
-          <p>在画板或图层中选择对象以编辑属性。</p>
+        <div v-else class="canvas-settings">
+          <section class="property-section">
+            <h3>画布尺寸 / Canvas size</h3>
+            <div class="canvas-preset-grid">
+              <button
+                v-for="preset in canvasPresets"
+                :key="preset.label"
+                type="button"
+                :class="{
+                  active:
+                    store.document.canvas.width === preset.width &&
+                    store.document.canvas.height === preset.height,
+                }"
+                @click="store.setCanvasSize(preset.width, preset.height)"
+              >
+                <strong>{{ preset.label }}</strong>
+                <span>{{ preset.detail }}</span>
+              </button>
+            </div>
+            <div class="field-grid">
+              <label>
+                <span>画布宽度 / Width</span>
+                <input
+                  v-model.number="canvasWidthDraft"
+                  type="number"
+                  min="1"
+                  max="16384"
+                />
+              </label>
+              <label>
+                <span>画布高度 / Height</span>
+                <input
+                  v-model.number="canvasHeightDraft"
+                  type="number"
+                  min="1"
+                  max="16384"
+                />
+              </label>
+            </div>
+            <div class="canvas-size-actions">
+              <button type="button" @click="applyCanvasSize">
+                应用尺寸 / Apply
+              </button>
+              <button type="button" @click="store.swapCanvasSize">
+                交换宽高 / Swap
+              </button>
+            </div>
+          </section>
+
+          <section class="property-section">
+            <div class="toggle-row">
+              <h3>透明背景 / Transparent</h3>
+              <input
+                :checked="store.document.canvas.background.type === 'transparent'"
+                type="checkbox"
+                aria-label="透明背景"
+                @change="
+                  store.setCanvasTransparent(
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+            </div>
+            <label
+              class="canvas-color-field"
+              :class="{
+                disabled:
+                  store.document.canvas.background.type === 'transparent',
+              }"
+            >
+              <span>背景颜色 / Background</span>
+              <span>
+                <input
+                  :value="canvasColor"
+                  type="color"
+                  aria-label="画布背景颜色"
+                  :disabled="
+                    store.document.canvas.background.type === 'transparent'
+                  "
+                  @change="
+                    store.setCanvasBackgroundColor(
+                      ($event.target as HTMLInputElement).value,
+                    )
+                  "
+                />
+                <output>{{ canvasColor.toUpperCase() }}</output>
+              </span>
+            </label>
+          </section>
         </div>
       </div>
 
@@ -409,4 +520,3 @@ const ratioOptions = [
     </template>
   </aside>
 </template>
-

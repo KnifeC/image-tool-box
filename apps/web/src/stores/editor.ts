@@ -8,6 +8,7 @@ import {
   normalizeZIndexes,
   SnapshotCommand,
   type ArrowNode,
+  type CanvasConfig,
   type EllipseNode,
   type FreehandNode,
   type ImageNode,
@@ -20,7 +21,6 @@ import {
 import {
   exportProjectArchive,
   importProjectArchive,
-  loadLocalProject,
   saveLocalProject,
 } from "@imagetoolbox/project-format";
 import type { ImageToolBoxPlatform, OpenedFile } from "@imagetoolbox/platform-api";
@@ -77,7 +77,13 @@ export const useEditorStore = defineStore("editor", () => {
   const dirty = ref(false);
   const saving = ref(false);
   const toast = ref("");
-  const demoLoaded = ref(false);
+  const testProjectLoading = ref(false);
+  const fitRequest = ref(0);
+  const lastCanvasColor = ref(
+    document.canvas.background.type === "color"
+      ? document.canvas.background.color
+      : "#ffffff",
+  );
   let autosaveTimer: number | undefined;
 
   const nodes = computed(() => [...document.nodes].sort((a, b) => a.zIndex - b.zIndex));
@@ -135,6 +141,57 @@ export const useEditorStore = defineStore("editor", () => {
     } else {
       selectedIds.value = [id];
     }
+  }
+
+  function setCanvasSize(width: number, height: number) {
+    const nextWidth = clampCanvasDimension(width);
+    const nextHeight = clampCanvasDimension(height);
+    if (
+      nextWidth === document.canvas.width &&
+      nextHeight === document.canvas.height
+    ) {
+      return;
+    }
+    mutate("resize-canvas", () => {
+      document.canvas.width = nextWidth;
+      document.canvas.height = nextHeight;
+    });
+    fitCanvas();
+  }
+
+  function swapCanvasSize() {
+    setCanvasSize(document.canvas.height, document.canvas.width);
+  }
+
+  function setCanvasTransparent(transparent: boolean) {
+    if (transparent && document.canvas.background.type === "color") {
+      lastCanvasColor.value = document.canvas.background.color;
+    }
+    const background: CanvasConfig["background"] = transparent
+      ? { type: "transparent" }
+      : { type: "color", color: lastCanvasColor.value };
+    if (document.canvas.background.type === background.type) return;
+    mutate("change-canvas-background", () => {
+      document.canvas.background = background;
+    });
+  }
+
+  function setCanvasBackgroundColor(color: string) {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+    lastCanvasColor.value = color;
+    if (
+      document.canvas.background.type === "color" &&
+      document.canvas.background.color.toLowerCase() === color.toLowerCase()
+    ) {
+      return;
+    }
+    mutate("change-canvas-background", () => {
+      document.canvas.background = { type: "color", color };
+    });
+  }
+
+  function fitCanvas() {
+    fitRequest.value += 1;
   }
 
   async function importFiles(files: OpenedFile[]) {
@@ -530,6 +587,9 @@ export const useEditorStore = defineStore("editor", () => {
   async function openProjectBlob(blob: Blob) {
     const imported = await importProjectArchive(blob);
     Object.assign(document, imported.document);
+    if (document.canvas.background.type === "color") {
+      lastCanvasColor.value = document.canvas.background.color;
+    }
     selectedIds.value = [];
     for (const [id, asset] of assets) {
       const url = assetUrls.get(id);
@@ -569,67 +629,59 @@ export const useEditorStore = defineStore("editor", () => {
     showToast("图片已导出 / Image exported");
   }
 
-  async function loadDemo() {
-    if (demoLoaded.value || document.nodes.length) return;
-    demoLoaded.value = true;
-    const paths = [
-      `${import.meta.env.BASE_URL}demo/alpine-lake.png`,
-      `${import.meta.env.BASE_URL}demo/lavender-field.png`,
-    ];
-    const demoBlobs = await Promise.all(
-      paths.map(async (path) => {
-        const response = await fetch(path);
-        return response.blob();
-      }),
-    );
-    const lake = demoBlobs[0]!;
-    const lavender = demoBlobs[1]!;
-    const lakeId = await addImageBlob(lake, "湖泊山景.jpg", {
-      x: 100,
-      y: 105,
-      width: 430,
-      height: 322,
-    });
-    await addImageBlob(lavender, "薰衣草花田.jpg", {
-      x: 600,
-      y: 520,
-      width: 370,
-      height: 278,
-    });
-    addNode("text");
-    const text = selectedNodes.value[0];
-    if (text?.type === "text") {
-      updateNode(
-        text.id,
-        { x: 505, y: 410, width: 280, height: 68, rotation: -6 } as Partial<TextNode>,
+  async function openTestProject() {
+    if (testProjectLoading.value || document.nodes.length) return;
+    testProjectLoading.value = true;
+    try {
+      const paths = [
+        `${import.meta.env.BASE_URL}demo/alpine-lake.png`,
+        `${import.meta.env.BASE_URL}demo/lavender-field.png`,
+      ];
+      const demoBlobs = await Promise.all(
+        paths.map(async (path) => {
+          const response = await fetch(path);
+          if (!response.ok) throw new Error(`Unable to load test asset: ${path}`);
+          return response.blob();
+        }),
       );
-    }
-    addNode("arrow");
-    const arrow = selectedNodes.value[0];
-    if (arrow?.type === "arrow") {
-      updateNode(
-        arrow.id,
-        { x: 570, y: 515, width: 120, height: 70 } as Partial<ArrowNode>,
-      );
-    }
-    select(lakeId);
-    dirty.value = false;
-  }
-
-  async function restoreOrDemo() {
-    const currentProjectId = window.localStorage.getItem(CURRENT_PROJECT_KEY);
-    const local = currentProjectId
-      ? await loadLocalProject(currentProjectId)
-      : undefined;
-    if (local) {
-      Object.assign(document, local.document);
-      for (const [id, blob] of local.assets) {
-        assets.set(id, blob);
-        refreshAssetUrl(id, blob);
+      const lake = demoBlobs[0]!;
+      const lavender = demoBlobs[1]!;
+      const lakeId = await addImageBlob(lake, "湖泊山景.jpg", {
+        x: 100,
+        y: 105,
+        width: 430,
+        height: 322,
+      });
+      await addImageBlob(lavender, "薰衣草花田.jpg", {
+        x: 600,
+        y: 520,
+        width: 370,
+        height: 278,
+      });
+      addNode("text");
+      const text = selectedNodes.value[0];
+      if (text?.type === "text") {
+        updateNode(
+          text.id,
+          { x: 505, y: 410, width: 280, height: 68, rotation: -6 } as Partial<TextNode>,
+        );
       }
-      return;
+      addNode("arrow");
+      const arrow = selectedNodes.value[0];
+      if (arrow?.type === "arrow") {
+        updateNode(
+          arrow.id,
+          { x: 570, y: 515, width: 120, height: 70 } as Partial<ArrowNode>,
+        );
+      }
+      select(lakeId);
+      dirty.value = false;
+    } catch (error) {
+      console.error(error);
+      showToast("测试工程打开失败 / Failed to open test project");
+    } finally {
+      testProjectLoading.value = false;
     }
-    await loadDemo();
   }
 
   function showToast(message: string) {
@@ -657,10 +709,17 @@ export const useEditorStore = defineStore("editor", () => {
     dirty,
     saving,
     toast,
+    testProjectLoading,
+    fitRequest,
     canUndo,
     canRedo,
     setTool,
     select,
+    setCanvasSize,
+    swapCanvasSize,
+    setCanvasTransparent,
+    setCanvasBackgroundColor,
+    fitCanvas,
     importFiles,
     addNode,
     addFreehand,
@@ -679,12 +738,17 @@ export const useEditorStore = defineStore("editor", () => {
     resetCrop,
     saveProject,
     openProject,
+    openTestProject,
     exportImage,
-    restoreOrDemo,
     saveLocal,
   };
 });
 
 function safeName(name: string) {
   return name.replace(/[<>:"/\\|?*]+/g, "-").replace(/\s*\/\s*/g, "-") || "image";
+}
+
+function clampCanvasDimension(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(16_384, Math.round(value)));
 }

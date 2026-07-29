@@ -28,7 +28,7 @@ function setZoom(value: number) {
         <Plus :size="16" />
       </button>
       <button class="zoom-value" type="button">{{ Math.round(store.zoom * 100) }}%</button>
-      <button class="fit-button" type="button" @click="setZoom(0.55)">
+      <button class="fit-button" type="button" @click="store.fitCanvas">
         <Maximize :size="16" />
         <span>适应 / Fit</span>
       </button>
@@ -43,4 +43,3 @@ function setZoom(value: number) {
     </div>
   </footer>
 </template>
-

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import type Konva from "konva";
+import { FolderOpen } from "lucide-vue-next";
 import { useEditorStore } from "../stores/editor";
 
 const store = useEditorStore();
@@ -13,6 +14,7 @@ const imageVersion = ref(0);
 const drawing = ref(false);
 const draftPoints = ref<number[]>([]);
 let resizeObserver: ResizeObserver | null = null;
+const checkerboardPattern = createCheckerboardPattern();
 
 const stagePosition = computed(() => ({
   x: (size.value.width - store.document.canvas.width * store.zoom) / 2 + store.viewOffset.x,
@@ -22,7 +24,13 @@ const stagePosition = computed(() => ({
 const backgroundColor = computed(() =>
   store.document.canvas.background.type === "color"
     ? store.document.canvas.background.color
-    : "rgba(255,255,255,0)",
+    : undefined,
+);
+
+const backgroundPattern = computed(() =>
+  store.document.canvas.background.type === "transparent"
+    ? checkerboardPattern
+    : undefined,
 );
 
 watchEffect(() => {
@@ -53,6 +61,28 @@ watch(
     transformer.getLayer()?.batchDraw();
   },
   { deep: true },
+);
+
+watch(
+  () => [
+    size.value.width,
+    size.value.height,
+    store.document.canvas.width,
+    store.document.canvas.height,
+    store.fitRequest,
+  ],
+  () => {
+    const padding = size.value.width <= 560 ? 32 : 72;
+    const nextZoom = Math.min(
+      (size.value.width - padding) / store.document.canvas.width,
+      (size.value.height - padding) / store.document.canvas.height,
+      1,
+    );
+    store.zoom = Math.max(0.1, Math.min(3, nextZoom));
+    store.viewOffset.x = 0;
+    store.viewOffset.y = 0;
+  },
+  { flush: "post" },
 );
 
 onMounted(() => {
@@ -158,6 +188,21 @@ function dragEnd(event: any, id: string) {
     rotation: node.rotation,
   });
 }
+
+function createCheckerboardPattern() {
+  const pattern = document.createElement("canvas");
+  const cellSize = 12;
+  pattern.width = cellSize * 2;
+  pattern.height = cellSize * 2;
+  const context = pattern.getContext("2d");
+  if (!context) return pattern;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, pattern.width, pattern.height);
+  context.fillStyle = "#e5e7eb";
+  context.fillRect(0, 0, cellSize, cellSize);
+  context.fillRect(cellSize, cellSize, cellSize, cellSize);
+  return pattern;
+}
 </script>
 
 <template>
@@ -188,6 +233,8 @@ function dragEnd(event: any, id: string) {
             width: store.document.canvas.width,
             height: store.document.canvas.height,
             fill: backgroundColor,
+            fillPatternImage: backgroundPattern,
+            fillPatternRepeat: 'repeat',
             shadowColor: '#64748b',
             shadowBlur: 24,
             shadowOpacity: 0.18,
@@ -456,9 +503,19 @@ function dragEnd(event: any, id: string) {
         />
       </v-layer>
     </v-stage>
+    <div v-if="!store.nodes.length" class="workspace-empty">
+      <p>画布还是空的</p>
+      <button
+        type="button"
+        :disabled="store.testProjectLoading"
+        @click="store.openTestProject"
+      >
+        <FolderOpen :size="19" />
+        {{ store.testProjectLoading ? "正在打开…" : "打开测试工程" }}
+      </button>
+    </div>
     <div v-if="store.tool === 'crop'" class="crop-mode-label">
       裁剪模式 / Crop mode
     </div>
   </main>
 </template>
-

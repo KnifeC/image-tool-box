@@ -72,6 +72,15 @@ async function submit() {
           {{ Math.round(store.document.canvas.width * scale) }} ×
           {{ Math.round(store.document.canvas.height * scale) }} px
         </div>
+        <p
+          v-if="
+            format === 'image/jpeg' &&
+            store.document.canvas.background.type === 'transparent'
+          "
+          class="export-warning"
+        >
+          JPG 不支持透明背景，将自动填充为白色。
+        </p>
       </div>
       <footer>
         <button class="secondary-button" type="button" @click="emit('close')">
@@ -85,4 +94,3 @@ async function submit() {
     </section>
   </div>
 </template>
-

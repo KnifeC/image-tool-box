@@ -73,9 +73,8 @@ function onDrop(event: DragEvent) {
   ).then(store.importFiles);
 }
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener("keydown", keyboard);
-  await store.restoreOrDemo();
   removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
 
