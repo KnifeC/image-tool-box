@@ -87,6 +87,13 @@ const backgroundPattern = computed(() =>
     : undefined,
 );
 
+const canTransformBackground = computed(
+  () =>
+    store.document.canvas.background.transformEnabled &&
+    !store.document.canvas.background.locked &&
+    !store.document.canvas.background.autoSize,
+);
+
 watchEffect(() => {
   imageVersion.value;
   for (const [assetId, url] of store.assetUrls) {
@@ -106,8 +113,7 @@ watch(
     store.selectedIds.slice(),
     store.tool,
     store.nodes.length,
-    store.document.canvas.background.locked,
-    store.document.canvas.background.autoSize,
+    canTransformBackground.value,
     store.cropSelection,
   ],
   async () => {
@@ -123,8 +129,7 @@ watch(
           .filter(
             (id) =>
               id !== "background" ||
-              (!store.document.canvas.background.locked &&
-                !store.document.canvas.background.autoSize),
+              canTransformBackground.value,
           )
           .map((id) => stage.findOne(`#${id}`))
           .filter(Boolean);
@@ -506,12 +511,10 @@ function createCheckerboardPattern() {
             shadowOffsetY: 8,
             listening:
               store.tool === 'select' &&
-              !store.document.canvas.background.locked &&
-              !store.document.canvas.background.autoSize,
+              canTransformBackground,
             draggable:
               store.tool === 'select' &&
-              !store.document.canvas.background.locked &&
-              !store.document.canvas.background.autoSize,
+              canTransformBackground,
           }"
           @mousedown="selectNode($event, store.document.canvas.background.id)"
           @touchstart="selectNode($event, store.document.canvas.background.id)"
@@ -962,6 +965,7 @@ function createCheckerboardPattern() {
             anchorStrokeWidth: 2 / store.zoom,
             anchorSize: 10 / store.zoom,
             rotateAnchorOffset: 32 / store.zoom,
+            rotateEnabled: !store.backgroundSelected,
             keepRatio: keepSelectionRatio,
             enabledAnchors: [
               'top-left',

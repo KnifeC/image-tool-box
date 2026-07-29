@@ -39,6 +39,7 @@ export type BackgroundLayerConfig = {
   visible: boolean;
   locked: boolean;
   autoSize: boolean;
+  transformEnabled: boolean;
   bounds: Rect;
 } & (
   | { type: "color"; color: string }
@@ -299,6 +300,7 @@ export function createDocument(name = "未命名 / Untitled"): ImageToolBoxDocum
         visible: true,
         locked: true,
         autoSize: true,
+        transformEnabled: false,
         bounds: { x: 0, y: 0, width: 1080, height: 1080 },
       },
     },
@@ -378,6 +380,7 @@ export function normalizeDocument(document: ImageToolBoxDocument) {
     visible: legacy.visible ?? true,
     locked: legacy.locked ?? true,
     autoSize: legacy.autoSize ?? true,
+    transformEnabled: legacy.transformEnabled ?? false,
     bounds: {
       ...fallbackBounds,
       ...(legacy.bounds ?? {}),

@@ -69,6 +69,11 @@ const canvasColor = computed(() =>
 );
 const canvasWidthDraft = ref(store.backgroundBounds.width);
 const canvasHeightDraft = ref(store.backgroundBounds.height);
+const backgroundSizeDisabled = computed(
+  () =>
+    store.document.canvas.background.locked ||
+    store.document.canvas.background.autoSize,
+);
 
 watch(
   () => [store.backgroundBounds.width, store.backgroundBounds.height],
@@ -779,6 +784,7 @@ const canvasPresets = [
                 <input
                   :checked="store.document.canvas.background.autoSize"
                   type="checkbox"
+                  :disabled="store.document.canvas.background.locked"
                   @change="
                     store.setBackgroundAutoSize(
                       ($event.target as HTMLInputElement).checked,
@@ -790,6 +796,30 @@ const canvasPresets = [
           </section>
           <section class="property-section">
             <h3>背景尺寸 / Background size</h3>
+            <div class="background-toggle-list background-size-toggle">
+              <label>
+                <span>在画布中拖动/缩放 / Drag/resize on canvas</span>
+                <input
+                  :checked="
+                    store.document.canvas.background.transformEnabled
+                  "
+                  type="checkbox"
+                  :disabled="store.document.canvas.background.locked"
+                  @change="
+                    store.setBackgroundTransformEnabled(
+                      ($event.target as HTMLInputElement).checked,
+                    )
+                  "
+                />
+              </label>
+            </div>
+            <p class="background-transform-help">
+              {{
+                store.document.canvas.background.locked
+                  ? "背景已锁定，尺寸、拖动和缩放均不可修改。 / Background geometry is locked."
+                  : "可直接拖动背景，并使用控制点调整大小。 / Drag the background or resize it with the handles."
+              }}
+            </p>
             <div class="canvas-preset-grid">
               <button
                 v-for="preset in canvasPresets"
@@ -800,7 +830,7 @@ const canvasPresets = [
                     store.backgroundBounds.width === preset.width &&
                     store.backgroundBounds.height === preset.height,
                 }"
-                :disabled="store.document.canvas.background.autoSize"
+                :disabled="backgroundSizeDisabled"
                 @click="store.setCanvasSize(preset.width, preset.height)"
               >
                 <strong>{{ preset.label }}</strong>
@@ -815,7 +845,7 @@ const canvasPresets = [
                   type="number"
                   min="1"
                   max="16384"
-                  :disabled="store.document.canvas.background.autoSize"
+                  :disabled="backgroundSizeDisabled"
                 />
               </label>
               <label>
@@ -825,21 +855,21 @@ const canvasPresets = [
                   type="number"
                   min="1"
                   max="16384"
-                  :disabled="store.document.canvas.background.autoSize"
+                  :disabled="backgroundSizeDisabled"
                 />
               </label>
             </div>
             <div class="canvas-size-actions">
               <button
                 type="button"
-                :disabled="store.document.canvas.background.autoSize"
+                :disabled="backgroundSizeDisabled"
                 @click="applyCanvasSize"
               >
                 应用尺寸 / Apply
               </button>
               <button
                 type="button"
-                :disabled="store.document.canvas.background.autoSize"
+                :disabled="backgroundSizeDisabled"
                 @click="store.swapCanvasSize"
               >
                 交换宽高 / Swap

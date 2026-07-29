@@ -220,6 +220,7 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function setCanvasSize(width: number, height: number) {
+    if (document.canvas.background.locked) return;
     const nextWidth = clampCanvasDimension(width);
     const nextHeight = clampCanvasDimension(height);
     const currentBounds = getEffectiveBackgroundBounds(document);
@@ -295,10 +296,12 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function setBackgroundAutoSize(autoSize: boolean) {
+    if (document.canvas.background.locked) return;
     if (document.canvas.background.autoSize === autoSize) return;
     const currentBounds = getEffectiveBackgroundBounds(document);
     mutate("change-background-auto-size", () => {
       document.canvas.background.autoSize = autoSize;
+      if (autoSize) document.canvas.background.transformEnabled = false;
       document.canvas.background.bounds = currentBounds;
       document.canvas.width = Math.max(1, Math.round(currentBounds.width));
       document.canvas.height = Math.max(1, Math.round(currentBounds.height));
@@ -306,15 +309,40 @@ export const useEditorStore = defineStore("editor", () => {
     fitCanvas();
   }
 
+  function setBackgroundTransformEnabled(enabled: boolean) {
+    if (document.canvas.background.locked) return;
+    if (document.canvas.background.transformEnabled === enabled) return;
+    const currentBounds = getEffectiveBackgroundBounds(document);
+    mutate("change-background-transform-enabled", () => {
+      document.canvas.background.transformEnabled = enabled;
+      if (enabled) {
+        document.canvas.background.autoSize = false;
+        document.canvas.background.bounds = currentBounds;
+        document.canvas.width = Math.max(1, Math.round(currentBounds.width));
+        document.canvas.height = Math.max(1, Math.round(currentBounds.height));
+      }
+    });
+    if (enabled) {
+      tool.value = "select";
+      select(BACKGROUND_LAYER_ID);
+    }
+  }
+
   function toggleBackground(key: "visible" | "locked") {
     mutate(`toggle-background-${key}`, () => {
       document.canvas.background[key] = !document.canvas.background[key];
     });
-    fitCanvas();
+    if (key === "visible") fitCanvas();
   }
 
   function transformBackground(bounds: Rect) {
-    if (document.canvas.background.autoSize || document.canvas.background.locked) return;
+    if (
+      !document.canvas.background.transformEnabled ||
+      document.canvas.background.autoSize ||
+      document.canvas.background.locked
+    ) {
+      return;
+    }
     const next = {
       x: bounds.x,
       y: bounds.y,
@@ -1105,6 +1133,7 @@ export const useEditorStore = defineStore("editor", () => {
     setCanvasBackgroundColor,
     previewCanvasBackgroundColor,
     setBackgroundAutoSize,
+    setBackgroundTransformEnabled,
     toggleBackground,
     transformBackground,
     setTemporaryPan,
@@ -1156,6 +1185,7 @@ function backgroundMetadata(background: ImageToolBoxDocument["canvas"]["backgrou
     visible: background.visible,
     locked: background.locked,
     autoSize: background.autoSize,
+    transformEnabled: background.transformEnabled,
     bounds: { ...background.bounds },
   };
 }

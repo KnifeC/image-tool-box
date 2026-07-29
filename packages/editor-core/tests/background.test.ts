@@ -75,6 +75,7 @@ describe("background layer bounds", () => {
         visible: true,
         locked: true,
         autoSize: true,
+        transformEnabled: false,
         bounds: { x: 0, y: 0, width: 1080, height: 1080 },
       }),
     );

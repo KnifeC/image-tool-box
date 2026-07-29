@@ -737,6 +737,17 @@ select:disabled {
   accent-color: var(--accent);
 }
 
+.background-size-toggle {
+  margin-top: 13px;
+}
+
+.background-transform-help {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .canvas-preset-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
