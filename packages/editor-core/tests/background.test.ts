@@ -5,6 +5,7 @@ import {
   getDocumentBounds,
   getEffectiveBackgroundBounds,
   normalizeDocument,
+  rectFromPoints,
   type RectangleNode,
 } from "../src";
 
@@ -77,5 +78,22 @@ describe("background layer bounds", () => {
         bounds: { x: 0, y: 0, width: 1080, height: 1080 },
       }),
     );
+  });
+
+  it("creates freeform and square bounds from any drag direction", () => {
+    expect(rectFromPoints({ x: 40, y: 20 }, { x: 10, y: 60 })).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    });
+    expect(
+      rectFromPoints({ x: 40, y: 20 }, { x: 10, y: 35 }, true),
+    ).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 30,
+    });
   });
 });

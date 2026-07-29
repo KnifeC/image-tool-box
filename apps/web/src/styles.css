@@ -304,6 +304,7 @@ textarea:focus-visible {
   gap: 14px;
   transform: translate(-50%, -50%);
   text-align: center;
+  pointer-events: none;
 }
 
 .workspace-empty p {
@@ -326,6 +327,7 @@ textarea:focus-visible {
   box-shadow: 0 7px 20px rgba(35, 43, 72, 0.12);
   font-weight: 650;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .workspace-empty button:hover:not(:disabled) {
@@ -436,7 +438,9 @@ textarea:focus-visible {
 }
 
 .field-grid input,
+.field-grid select,
 .single-field input,
+.single-field select,
 .inline-section input,
 .text-field textarea,
 .dialog-body select {
@@ -453,6 +457,87 @@ textarea:focus-visible {
 .text-field textarea {
   padding: 9px 10px;
   resize: vertical;
+}
+
+.tool-options-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 0 16px;
+  border-bottom: 1px solid #eceef2;
+}
+
+.tool-options-heading h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tool-options-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tool-options-heading button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: #3349a3;
+  background: white;
+  border: 1px solid #d8def7;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tool-options-grid select,
+.single-field select {
+  appearance: auto;
+}
+
+.tool-color-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tool-color-field > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tool-color-field input[type="color"] {
+  width: 44px;
+  height: 34px;
+  padding: 3px;
+  background: white;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.tool-color-field output,
+.tool-style-row output {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tool-opacity-heading {
+  margin-top: 22px;
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .inline-section label {

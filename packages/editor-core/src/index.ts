@@ -5,6 +5,26 @@ export type Rect = {
   height: number;
 };
 
+export function rectFromPoints(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  constrainSquare = false,
+): Rect {
+  let deltaX = end.x - start.x;
+  let deltaY = end.y - start.y;
+  if (constrainSquare) {
+    const size = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+    deltaX = (deltaX < 0 ? -1 : 1) * size;
+    deltaY = (deltaY < 0 ? -1 : 1) * size;
+  }
+  return {
+    x: Math.min(start.x, start.x + deltaX),
+    y: Math.min(start.y, start.y + deltaY),
+    width: Math.abs(deltaX),
+    height: Math.abs(deltaY),
+  };
+}
+
 export type CanvasConfig = {
   width: number;
   height: number;

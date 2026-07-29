@@ -49,9 +49,9 @@ function keyboard(event: KeyboardEvent) {
   } else if (event.key.toLowerCase() === "c") {
     store.setTool("crop");
   } else if (event.key.toLowerCase() === "t") {
-    store.addNode("text");
+    store.setTool("text");
   } else if (event.key.toLowerCase() === "r") {
-    store.addNode("rectangle");
+    store.setTool("rectangle");
   } else if (event.key.toLowerCase() === "p") {
     store.setTool("pen");
   } else if (event.key === "Escape") {

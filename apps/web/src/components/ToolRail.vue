@@ -42,10 +42,6 @@ function activate(id: EditorTool) {
     emit("import");
     return;
   }
-  if (["text", "rectangle", "ellipse"].includes(id)) {
-    store.addNode(id as "text" | "rectangle" | "ellipse");
-    return;
-  }
   store.setTool(id);
 }
 </script>

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import type Konva from "konva";
 import { FolderOpen } from "lucide-vue-next";
+import { rectFromPoints } from "@imagetoolbox/editor-core";
 import { useEditorStore } from "../stores/editor";
 
 const store = useEditorStore();
@@ -20,7 +21,20 @@ const draftLinear = ref<{
   start: { x: number; y: number };
   end: { x: number; y: number };
 } | null>(null);
-const gesture = ref<"freehand" | "linear" | "pan" | null>(null);
+const draftShape = ref<{
+  type: "rectangle" | "ellipse";
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  constrainSquare: boolean;
+} | null>(null);
+const textPlacement = ref<{
+  screenStart: { x: number; y: number };
+  screenEnd: { x: number; y: number };
+  point: { x: number; y: number };
+} | null>(null);
+const gesture = ref<
+  "freehand" | "linear" | "shape" | "text" | "pan" | null
+>(null);
 const panStart = ref<{
   pointer: { x: number; y: number };
   offset: { x: number; y: number };
@@ -34,7 +48,31 @@ const stagePosition = computed(() => ({
   y: fitOrigin.value.y + store.viewOffset.y,
 }));
 const stageCursor = computed(() =>
-  store.effectivePan ? (gesture.value === "pan" ? "grabbing" : "grab") : "default",
+  store.effectivePan
+    ? gesture.value === "pan"
+      ? "grabbing"
+      : "grab"
+    : ["rectangle", "ellipse", "line", "arrow", "pen", "highlighter"].includes(
+          store.tool,
+        )
+      ? "crosshair"
+      : store.tool === "text"
+        ? "text"
+      : "default",
+);
+const draftShapeBounds = computed(() =>
+  draftShape.value
+    ? rectFromPoints(
+        draftShape.value.start,
+        draftShape.value.end,
+        draftShape.value.constrainSquare,
+      )
+    : null,
+);
+const keepSelectionRatio = computed(
+  () =>
+    store.selectedNodes.length > 0 &&
+    store.selectedNodes.every((node) => node.type === "image"),
 );
 
 const backgroundColor = computed(() =>
@@ -191,6 +229,15 @@ function onStagePointerDown(event: any) {
   }
   const point = documentPoint(stage);
   if (!point) return;
+  if (store.tool === "text") {
+    gesture.value = "text";
+    textPlacement.value = {
+      screenStart: screenPoint,
+      screenEnd: screenPoint,
+      point,
+    };
+    return;
+  }
   if (store.tool === "pen" || store.tool === "highlighter") {
     gesture.value = "freehand";
     draftPoints.value = [point.x, point.y];
@@ -202,6 +249,16 @@ function onStagePointerDown(event: any) {
       type: store.tool,
       start: point,
       end: point,
+    };
+    return;
+  }
+  if (store.tool === "rectangle" || store.tool === "ellipse") {
+    gesture.value = "shape";
+    draftShape.value = {
+      type: store.tool,
+      start: point,
+      end: point,
+      constrainSquare: Boolean(event.evt?.shiftKey),
     };
     return;
   }
@@ -219,6 +276,16 @@ function onStagePointerMove(event: any) {
       panStart.value.offset.y + pointer.y - panStart.value.pointer.y;
     return;
   }
+  if (gesture.value === "text" && textPlacement.value) {
+    const pointer = stage.getPointerPosition();
+    if (pointer) {
+      textPlacement.value = {
+        ...textPlacement.value,
+        screenEnd: pointer,
+      };
+    }
+    return;
+  }
   const point = documentPoint(stage);
   if (!point) return;
   if (gesture.value === "freehand") {
@@ -230,11 +297,27 @@ function onStagePointerMove(event: any) {
     draftPoints.value = [...points, point.x, point.y];
   } else if (gesture.value === "linear" && draftLinear.value) {
     draftLinear.value = { ...draftLinear.value, end: point };
+  } else if (gesture.value === "shape" && draftShape.value) {
+    draftShape.value = {
+      ...draftShape.value,
+      end: point,
+      constrainSquare: Boolean(event.evt?.shiftKey),
+    };
   }
 }
 
 function finishGesture() {
-  if (gesture.value === "freehand" && draftPoints.value.length >= 4) {
+  if (gesture.value === "text" && textPlacement.value) {
+    const { screenStart, screenEnd, point } = textPlacement.value;
+    if (
+      Math.hypot(
+        screenEnd.x - screenStart.x,
+        screenEnd.y - screenStart.y,
+      ) < 4
+    ) {
+      store.addTextAt(point);
+    }
+  } else if (gesture.value === "freehand" && draftPoints.value.length >= 4) {
     const drawTool =
       store.tool === "highlighter" ? "highlighter" : "pen";
     store.addFreehand(draftPoints.value, drawTool);
@@ -243,11 +326,22 @@ function finishGesture() {
     if (Math.hypot(end.x - start.x, end.y - start.y) * store.zoom >= 4) {
       store.addLinearNode(type, start, end);
     }
+  } else if (gesture.value === "shape" && draftShape.value) {
+    const { type, start, end, constrainSquare } = draftShape.value;
+    const bounds = rectFromPoints(start, end, constrainSquare);
+    if (
+      bounds.width * store.zoom >= 4 &&
+      bounds.height * store.zoom >= 4
+    ) {
+      store.addShapeNode(type, start, end, constrainSquare);
+    }
   }
   gesture.value = null;
   panStart.value = null;
   draftPoints.value = [];
   draftLinear.value = null;
+  draftShape.value = null;
+  textPlacement.value = null;
 }
 
 function cancelGesture() {
@@ -255,6 +349,8 @@ function cancelGesture() {
   panStart.value = null;
   draftPoints.value = [];
   draftLinear.value = null;
+  draftShape.value = null;
+  textPlacement.value = null;
 }
 
 function documentPoint(stage: Konva.Stage) {
@@ -345,6 +441,15 @@ function cropTransformEnd(event: any) {
     width,
     height,
   });
+}
+
+function colorWithOpacity(color: string, opacity: number) {
+  const normalized = color.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return color;
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${Math.max(0, Math.min(1, opacity))})`;
 }
 
 function createCheckerboardPattern() {
@@ -461,7 +566,12 @@ function createCheckerboardPattern() {
               height: node.height,
               rotation: node.rotation,
               opacity: node.opacity,
-              fill: node.style.fill.enabled ? node.style.fill.color : undefined,
+              fill: node.style.fill.enabled
+                ? colorWithOpacity(
+                    node.style.fill.color,
+                    node.style.fill.opacity,
+                  )
+                : undefined,
               fillEnabled: node.style.fill.enabled,
               fillAfterStrokeEnabled: true,
               stroke: node.style.stroke.enabled ? node.style.stroke.color : undefined,
@@ -479,16 +589,30 @@ function createCheckerboardPattern() {
             v-else-if="node.type === 'ellipse' && node.visible"
             :config="{
               id: node.id,
-              x: node.x + node.width / 2,
-              y: node.y + node.height / 2,
+              x: node.x,
+              y: node.y,
               radiusX: node.width / 2,
               radiusY: node.height / 2,
+              offsetX: -node.width / 2,
+              offsetY: -node.height / 2,
               rotation: node.rotation,
               opacity: node.opacity,
-              fill: node.style.fill.enabled ? node.style.fill.color : undefined,
-              stroke: node.style.stroke.enabled ? node.style.stroke.color : undefined,
-              strokeWidth: node.style.stroke.enabled ? node.style.stroke.width : 0,
-              dash: node.style.stroke.style === 'dashed' ? [10, 8] : undefined,
+              fill: node.style.fill.enabled
+                ? colorWithOpacity(
+                    node.style.fill.color,
+                    node.style.fill.opacity,
+                  )
+                : undefined,
+              stroke: node.style.stroke.enabled
+                ? node.style.stroke.color
+                : undefined,
+              strokeWidth: node.style.stroke.enabled
+                ? node.style.stroke.width
+                : 0,
+              dash:
+                node.style.stroke.style === 'dashed'
+                  ? [10, 8]
+                  : undefined,
               draggable: store.tool === 'select' && !node.locked,
             }"
             @mousedown="selectNode($event, node.id)"
@@ -527,6 +651,7 @@ function createCheckerboardPattern() {
               stroke: node.stroke.color,
               fill: node.stroke.color,
               strokeWidth: node.stroke.width,
+              dash: node.stroke.style === 'dashed' ? [10, 8] : undefined,
               pointerLength: node.pointerLength,
               pointerWidth: node.pointerWidth,
               pointerAtBeginning: node.arrowStart,
@@ -592,9 +717,18 @@ function createCheckerboardPattern() {
           v-if="draftPoints.length"
           :config="{
             points: draftPoints,
-            stroke: store.tool === 'highlighter' ? '#f6d74b' : '#3157f5',
-            opacity: store.tool === 'highlighter' ? 0.32 : 1,
-            strokeWidth: store.tool === 'highlighter' ? 28 : 6,
+            stroke:
+              store.tool === 'highlighter'
+                ? store.toolPresets.highlighter.color
+                : store.toolPresets.pen.color,
+            opacity:
+              store.tool === 'highlighter'
+                ? store.toolPresets.highlighter.opacity
+                : store.toolPresets.pen.opacity,
+            strokeWidth:
+              store.tool === 'highlighter'
+                ? store.toolPresets.highlighter.width
+                : store.toolPresets.pen.width,
             lineCap: 'round',
             lineJoin: 'round',
             tension: 0.35,
@@ -611,11 +745,15 @@ function createCheckerboardPattern() {
               draftLinear.end.x,
               draftLinear.end.y,
             ],
-            stroke: '#f05252',
-            fill: '#f05252',
-            strokeWidth: 4,
-            pointerLength: 16,
-            pointerWidth: 14,
+            stroke: store.toolPresets.arrow.color,
+            fill: store.toolPresets.arrow.color,
+            strokeWidth: store.toolPresets.arrow.width,
+            dash:
+              store.toolPresets.arrow.style === 'dashed'
+                ? [10, 8]
+                : undefined,
+            pointerLength: store.toolPresets.arrow.pointerLength,
+            pointerWidth: store.toolPresets.arrow.pointerWidth,
             lineCap: 'round',
             listening: false,
           }"
@@ -629,9 +767,64 @@ function createCheckerboardPattern() {
               draftLinear.end.x,
               draftLinear.end.y,
             ],
-            stroke: '#3157f5',
-            strokeWidth: 4,
+            stroke: store.toolPresets.line.color,
+            strokeWidth: store.toolPresets.line.width,
+            dash:
+              store.toolPresets.line.style === 'dashed'
+                ? [10, 8]
+                : undefined,
             lineCap: 'round',
+            listening: false,
+          }"
+        />
+
+        <v-rect
+          v-if="draftShape?.type === 'rectangle' && draftShapeBounds"
+          :config="{
+            ...draftShapeBounds,
+            fill: store.toolPresets.rectangle.style.fill.enabled
+              ? colorWithOpacity(
+                  store.toolPresets.rectangle.style.fill.color,
+                  store.toolPresets.rectangle.style.fill.opacity,
+                )
+              : undefined,
+            stroke: store.toolPresets.rectangle.style.stroke.enabled
+              ? store.toolPresets.rectangle.style.stroke.color
+              : undefined,
+            strokeWidth: store.toolPresets.rectangle.style.stroke.enabled
+              ? store.toolPresets.rectangle.style.stroke.width
+              : 0,
+            dash:
+              store.toolPresets.rectangle.style.stroke.style === 'dashed'
+                ? [10, 8]
+                : undefined,
+            cornerRadius: store.toolPresets.rectangle.cornerRadius,
+            listening: false,
+          }"
+        />
+        <v-ellipse
+          v-else-if="draftShape?.type === 'ellipse' && draftShapeBounds"
+          :config="{
+            x: draftShapeBounds.x + draftShapeBounds.width / 2,
+            y: draftShapeBounds.y + draftShapeBounds.height / 2,
+            radiusX: draftShapeBounds.width / 2,
+            radiusY: draftShapeBounds.height / 2,
+            fill: store.toolPresets.ellipse.style.fill.enabled
+              ? colorWithOpacity(
+                  store.toolPresets.ellipse.style.fill.color,
+                  store.toolPresets.ellipse.style.fill.opacity,
+                )
+              : undefined,
+            stroke: store.toolPresets.ellipse.style.stroke.enabled
+              ? store.toolPresets.ellipse.style.stroke.color
+              : undefined,
+            strokeWidth: store.toolPresets.ellipse.style.stroke.enabled
+              ? store.toolPresets.ellipse.style.stroke.width
+              : 0,
+            dash:
+              store.toolPresets.ellipse.style.stroke.style === 'dashed'
+                ? [10, 8]
+                : undefined,
             listening: false,
           }"
         />
@@ -769,7 +962,7 @@ function createCheckerboardPattern() {
             anchorStrokeWidth: 2 / store.zoom,
             anchorSize: 10 / store.zoom,
             rotateAnchorOffset: 32 / store.zoom,
-            keepRatio: true,
+            keepRatio: keepSelectionRatio,
             enabledAnchors: [
               'top-left',
               'top-right',
@@ -797,6 +990,16 @@ function createCheckerboardPattern() {
     </div>
     <div v-if="store.tool === 'crop'" class="crop-mode-label">
       裁剪模式 / Crop mode
+    </div>
+    <div v-else-if="store.tool === 'text'" class="crop-mode-label">
+      单击画布放置文本 / Click to place text
+    </div>
+    <div
+      v-else-if="store.tool === 'rectangle' || store.tool === 'ellipse'"
+      class="crop-mode-label"
+    >
+      拖动绘制{{ store.tool === "rectangle" ? "矩形" : "椭圆" }} · Shift
+      绘制{{ store.tool === "rectangle" ? "正方形" : "圆形" }}
     </div>
   </main>
 </template>

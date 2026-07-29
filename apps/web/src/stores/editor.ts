@@ -9,6 +9,7 @@ import {
   HistoryStack,
   makeId,
   normalizeZIndexes,
+  rectFromPoints,
   SnapshotCommand,
   type ArrowNode,
   type EllipseNode,
@@ -28,6 +29,14 @@ import {
 } from "@imagetoolbox/project-format";
 import type { ImageToolBoxPlatform, OpenedFile } from "@imagetoolbox/platform-api";
 import { renderDocument } from "../services/exporter";
+import {
+  createDefaultToolPresets,
+  loadToolPresets,
+  normalizeToolPresets,
+  TOOL_PRESETS_STORAGE_KEY,
+  type CreationTool,
+  type ToolPresets,
+} from "../tool-presets";
 
 export type EditorTool =
   | "select"
@@ -56,7 +65,7 @@ const defaultStroke = () => ({
 });
 
 const defaultFill = () => ({
-  enabled: false,
+  enabled: true,
   color: "#f6c94c",
   opacity: 0.3,
 });
@@ -68,6 +77,11 @@ export const useEditorStore = defineStore("editor", () => {
   const assetUrls = shallowReactive(new Map<string, string>());
   const selectedIds = ref<string[]>([]);
   const tool = ref<EditorTool>("select");
+  const toolPresets = reactive(
+    loadToolPresets(
+      typeof window === "undefined" ? undefined : window.localStorage,
+    ),
+  );
   const inspectorTab = ref<"properties" | "layers">("properties");
   const mobilePanel = ref<"properties" | "layers" | null>(null);
   const zoom = ref(0.55);
@@ -85,6 +99,9 @@ export const useEditorStore = defineStore("editor", () => {
   const testProjectLoading = ref(false);
   const fitRequest = ref(0);
   const historyVersion = ref(0);
+  const textEditRequest = ref<{ nodeId: string; token: number } | null>(null);
+  let textEditToken = 0;
+  let previewBefore: ImageToolBoxDocument | null = null;
   const lastCanvasColor = ref(
     document.canvas.background.type === "color"
       ? document.canvas.background.color
@@ -116,6 +133,7 @@ export const useEditorStore = defineStore("editor", () => {
   });
 
   function mutate(type: string, operation: () => void) {
+    commitPreviewEdit();
     const before = cloneDocument(plainClone(document));
     operation();
     document.updatedAt = Date.now();
@@ -145,7 +163,46 @@ export const useEditorStore = defineStore("editor", () => {
   function setTool(next: EditorTool) {
     if (tool.value === "crop" && next !== "crop") cancelCrop();
     tool.value = next;
+    if (
+      next === "text" ||
+      next === "rectangle" ||
+      next === "ellipse" ||
+      next === "line" ||
+      next === "arrow" ||
+      next === "pen" ||
+      next === "highlighter"
+    ) {
+      inspectorTab.value = "properties";
+    }
     if (next === "crop") enterCrop();
+  }
+
+  function updateToolPreset<K extends CreationTool>(
+    targetTool: K,
+    patch: Partial<ToolPresets[K]>,
+  ) {
+    Object.assign(toolPresets[targetTool], patch);
+    const normalized = normalizeToolPresets(toolPresets);
+    Object.assign(toolPresets[targetTool], normalized[targetTool]);
+    persistToolPresets();
+  }
+
+  function resetToolPreset(targetTool: CreationTool) {
+    const defaults = createDefaultToolPresets();
+    Object.assign(toolPresets[targetTool], plainClone(defaults[targetTool]));
+    persistToolPresets();
+  }
+
+  function persistToolPresets() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        TOOL_PRESETS_STORAGE_KEY,
+        JSON.stringify(toolPresets),
+      );
+    } catch {
+      // Tool preferences are optional; drawing must still work if storage fails.
+    }
   }
 
   function select(id: string | null, additive = false) {
@@ -223,6 +280,18 @@ export const useEditorStore = defineStore("editor", () => {
         color,
       };
     });
+  }
+
+  function previewCanvasBackgroundColor(color: string) {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+    if (!previewBefore) previewBefore = cloneDocument(plainClone(document));
+    lastCanvasColor.value = color;
+    document.canvas.background = {
+      ...backgroundMetadata(document.canvas.background),
+      type: "color",
+      color,
+    };
+    document.updatedAt = Date.now();
   }
 
   function setBackgroundAutoSize(autoSize: boolean) {
@@ -431,11 +500,65 @@ export const useEditorStore = defineStore("editor", () => {
     tool.value = "select";
   }
 
+  function addTextAt(point: { x: number; y: number }) {
+    const preset = toolPresets.text;
+    const text = preset.text.trim() ? preset.text : "文本";
+    const lineCount = Math.max(1, text.split(/\r?\n/).length);
+    const node: TextNode = {
+      id: makeId("text"),
+      type: "text",
+      name: text.split(/\r?\n/, 1)[0] || "文本",
+      x: point.x,
+      y: point.y,
+      width: preset.width,
+      height: Math.max(
+        68,
+        preset.fontSize * preset.lineHeight * lineCount,
+      ),
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: document.nodes.length,
+      text,
+      fontFamily: preset.fontFamily,
+      fontSize: preset.fontSize,
+      fontWeight: preset.fontWeight,
+      fontStyle: "normal",
+      textDecoration: "none",
+      color: preset.color,
+      lineHeight: preset.lineHeight,
+      letterSpacing: 0,
+      align: preset.align,
+      textStroke: { enabled: false, color: "#ffffff", width: 1 },
+      background: {
+        enabled: false,
+        color: "#ffffff",
+        opacity: 1,
+        padding: 12,
+        cornerRadius: 8,
+      },
+    };
+    mutate("add-text", () => document.nodes.push(node));
+    select(node.id);
+    tool.value = "select";
+    inspectorTab.value = "properties";
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(max-width: 900px)").matches
+    ) {
+      mobilePanel.value = "properties";
+    }
+    textEditToken += 1;
+    textEditRequest.value = { nodeId: node.id, token: textEditToken };
+  }
+
   function addLinearNode(
     type: "line" | "arrow",
     start: { x: number; y: number },
     end: { x: number; y: number },
   ) {
+    const preset = toolPresets[type];
     const x = Math.min(start.x, end.x);
     const y = Math.min(start.y, end.y);
     const width = Math.max(1, Math.abs(end.x - start.x));
@@ -456,9 +579,9 @@ export const useEditorStore = defineStore("editor", () => {
       zIndex: document.nodes.length,
       points,
       stroke: {
-        color: type === "arrow" ? "#f05252" : "#3157f5",
-        width: 4,
-        style: "solid" as const,
+        color: preset.color,
+        width: preset.width,
+        style: preset.style,
       },
     };
     const node: LineNode | ArrowNode =
@@ -468,16 +591,48 @@ export const useEditorStore = defineStore("editor", () => {
             type: "arrow",
             arrowStart: false,
             arrowEnd: true,
-            pointerLength: 16,
-            pointerWidth: 14,
+            pointerLength: toolPresets.arrow.pointerLength,
+            pointerWidth: toolPresets.arrow.pointerWidth,
           }
         : { ...base, type: "line" };
     mutate(`draw-${type}`, () => document.nodes.push(node));
     select(node.id);
   }
 
+  function addShapeNode(
+    type: "rectangle" | "ellipse",
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+    constrainSquare = false,
+  ) {
+    const bounds = rectFromPoints(start, end, constrainSquare);
+    const preset = toolPresets[type];
+    const base = {
+      id: makeId(type),
+      name: type === "rectangle" ? "矩形 / Rectangle" : "椭圆 / Ellipse",
+      ...bounds,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: document.nodes.length,
+      style: plainClone(preset.style),
+    };
+    const node: RectangleNode | EllipseNode =
+      type === "rectangle"
+        ? {
+            ...base,
+            type: "rectangle",
+            cornerRadius: toolPresets.rectangle.cornerRadius,
+          }
+        : { ...base, type: "ellipse" };
+    mutate(`draw-${type}`, () => document.nodes.push(node));
+    select(node.id);
+  }
+
   function addFreehand(points: number[], drawTool: "pen" | "highlighter") {
     if (points.length < 4) return;
+    const preset = toolPresets[drawTool];
     const xs = points.filter((_, index) => index % 2 === 0);
     const ys = points.filter((_, index) => index % 2 === 1);
     const minX = Math.min(...xs);
@@ -494,13 +649,13 @@ export const useEditorStore = defineStore("editor", () => {
       width: Math.max(1, maxX - minX),
       height: Math.max(1, maxY - minY),
       rotation: 0,
-      opacity: drawTool === "pen" ? 1 : 0.32,
+      opacity: preset.opacity,
       visible: true,
       locked: false,
       zIndex: document.nodes.length,
       points: points.map((value, index) => value - (index % 2 === 0 ? minX : minY)),
-      color: drawTool === "pen" ? "#3157f5" : "#f6d74b",
-      strokeWidth: drawTool === "pen" ? 6 : 28,
+      color: preset.color,
+      strokeWidth: preset.width,
     };
     mutate(`draw-${drawTool}`, () => document.nodes.push(node));
     select(node.id);
@@ -517,6 +672,25 @@ export const useEditorStore = defineStore("editor", () => {
       document.updatedAt = Date.now();
       markDirty();
     }
+  }
+
+  function previewNode(id: string, patch: Partial<SceneNode>) {
+    if (!previewBefore) previewBefore = cloneDocument(plainClone(document));
+    const node = document.nodes.find((candidate) => candidate.id === id);
+    if (!node) return;
+    Object.assign(node, patch);
+    document.updatedAt = Date.now();
+  }
+
+  function commitPreviewEdit(type = "change-node") {
+    if (!previewBefore) return;
+    const before = previewBefore;
+    previewBefore = null;
+    const after = cloneDocument(plainClone(document));
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    history.commit(new SnapshotCommand(type, before, after));
+    historyVersion.value += 1;
+    markDirty();
   }
 
   function transformNode(
@@ -581,6 +755,7 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function undo() {
+    commitPreviewEdit();
     if (history.undo(document)) {
       historyVersion.value += 1;
       dirty.value = true;
@@ -592,6 +767,7 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function redo() {
+    commitPreviewEdit();
     if (history.redo(document)) {
       historyVersion.value += 1;
       dirty.value = true;
@@ -868,6 +1044,8 @@ export const useEditorStore = defineStore("editor", () => {
     documentBounds,
     effectivePan,
     tool,
+    toolPresets,
+    textEditRequest,
     inspectorTab,
     mobilePanel,
     zoom,
@@ -883,11 +1061,14 @@ export const useEditorStore = defineStore("editor", () => {
     canUndo,
     canRedo,
     setTool,
+    updateToolPreset,
+    resetToolPreset,
     select,
     setCanvasSize,
     swapCanvasSize,
     setCanvasTransparent,
     setCanvasBackgroundColor,
+    previewCanvasBackgroundColor,
     setBackgroundAutoSize,
     toggleBackground,
     transformBackground,
@@ -895,9 +1076,13 @@ export const useEditorStore = defineStore("editor", () => {
     fitCanvas,
     importFiles,
     addNode,
+    addTextAt,
     addLinearNode,
+    addShapeNode,
     addFreehand,
     updateNode,
+    previewNode,
+    commitPreviewEdit,
     transformNode,
     deleteSelected,
     duplicateSelected,

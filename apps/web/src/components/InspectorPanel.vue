@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   ArrowDown,
   ArrowUp,
@@ -11,15 +11,24 @@ import {
   X,
 } from "lucide-vue-next";
 import type {
+  ArrowNode,
+  FreehandNode,
   ImageNode,
+  LineNode,
   RectangleNode,
   SceneNode,
   TextNode,
 } from "@imagetoolbox/editor-core";
 import { useEditorStore } from "../stores/editor";
+import { isCreationTool } from "../tool-presets";
+import ToolOptionsPanel from "./ToolOptionsPanel.vue";
 
 const store = useEditorStore();
 const node = computed(() => store.primaryNode);
+const activeCreationTool = computed(() =>
+  isCreationTool(store.tool) ? store.tool : null,
+);
+const textInputRef = ref<HTMLTextAreaElement | null>(null);
 const canvasColor = computed(() =>
   store.document.canvas.background.type === "color"
     ? store.document.canvas.background.color
@@ -36,12 +45,35 @@ watch(
   },
 );
 
+watch(
+  () => store.textEditRequest?.token,
+  async () => {
+    await nextTick();
+    if (
+      store.textEditRequest?.nodeId !== node.value?.id ||
+      node.value?.type !== "text"
+    ) {
+      return;
+    }
+    textInputRef.value?.focus();
+    textInputRef.value?.select();
+  },
+);
+
 function numberValue(event: Event) {
   return Number((event.target as HTMLInputElement).value);
 }
 
 function update(patch: Partial<SceneNode>) {
   if (node.value) store.updateNode(node.value.id, patch);
+}
+
+function preview(patch: Partial<SceneNode>) {
+  if (node.value) store.previewNode(node.value.id, patch);
+}
+
+function finishPreview() {
+  store.commitPreviewEdit();
 }
 
 function updateImageBorder(key: "enabled" | "color" | "width", value: boolean | string | number) {
@@ -59,6 +91,38 @@ function updateShape(group: "stroke" | "fill", key: string, value: unknown) {
       [group]: { ...node.value.style[group], [key]: value },
     },
   } as Partial<RectangleNode>);
+}
+
+function previewShape(group: "stroke" | "fill", key: string, value: unknown) {
+  if (node.value?.type !== "rectangle" && node.value?.type !== "ellipse") return;
+  preview({
+    style: {
+      ...node.value.style,
+      [group]: { ...node.value.style[group], [key]: value },
+    },
+  } as Partial<RectangleNode>);
+}
+
+function previewImageBorder(
+  key: "color" | "width",
+  value: string | number,
+) {
+  if (node.value?.type !== "image") return;
+  preview({
+    border: { ...node.value.border, [key]: value },
+  } as Partial<ImageNode>);
+}
+
+function previewLinear(key: "color" | "width", value: string | number) {
+  if (node.value?.type !== "line" && node.value?.type !== "arrow") return;
+  preview({
+    stroke: { ...node.value.stroke, [key]: value },
+  } as Partial<LineNode | ArrowNode>);
+}
+
+function previewFreehand(key: "color" | "strokeWidth", value: string | number) {
+  if (node.value?.type !== "freehand") return;
+  preview({ [key]: value } as Partial<FreehandNode>);
 }
 
 function updateText(key: keyof TextNode, value: unknown) {
@@ -192,7 +256,8 @@ const canvasPresets = [
       </div>
 
       <div v-if="store.inspectorTab === 'properties'" class="panel-scroll">
-        <template v-if="node">
+        <ToolOptionsPanel v-if="activeCreationTool" />
+        <template v-else-if="node">
           <section class="property-section">
             <h3>位置 / Position</h3>
             <div class="field-grid">
@@ -259,7 +324,9 @@ const canvasPresets = [
               min="0"
               max="1"
               step="0.01"
-              @change="update({ opacity: numberValue($event) })"
+              @input="preview({ opacity: numberValue($event) })"
+              @change="finishPreview"
+              @blur="finishPreview"
             />
           </section>
 
@@ -276,7 +343,9 @@ const canvasPresets = [
               <input
                 :value="node.border.color"
                 type="color"
-                @change="updateImageBorder('color', ($event.target as HTMLInputElement).value)"
+                @input="previewImageBorder('color', ($event.target as HTMLInputElement).value)"
+                @change="finishPreview"
+                @blur="finishPreview"
               />
               <input
                 :value="node.border.width"
@@ -314,12 +383,17 @@ const canvasPresets = [
               <input
                 :value="node.style.stroke.color"
                 type="color"
-                @change="updateShape('stroke', 'color', ($event.target as HTMLInputElement).value)"
+                aria-label="描边颜色 / Stroke color"
+                :disabled="!node.style.stroke.enabled"
+                @input="previewShape('stroke', 'color', ($event.target as HTMLInputElement).value)"
+                @change="finishPreview"
+                @blur="finishPreview"
               />
               <input
                 :value="node.style.stroke.width"
                 type="number"
                 min="0"
+                :disabled="!node.style.stroke.enabled"
                 @change="updateShape('stroke', 'width', numberValue($event))"
               />
               <span>px</span>
@@ -336,15 +410,83 @@ const canvasPresets = [
               <input
                 :value="node.style.fill.color"
                 type="color"
-                @change="updateShape('fill', 'color', ($event.target as HTMLInputElement).value)"
+                aria-label="填充颜色 / Fill color"
+                :disabled="!node.style.fill.enabled"
+                @input="previewShape('fill', 'color', ($event.target as HTMLInputElement).value)"
+                @change="finishPreview"
+                @blur="finishPreview"
               />
               <input
                 :value="node.style.fill.opacity"
                 type="range"
                 min="0"
                 max="1"
-                step="0.05"
-                @change="updateShape('fill', 'opacity', numberValue($event))"
+                step="0.01"
+                aria-label="填充不透明度 / Fill opacity"
+                :disabled="!node.style.fill.enabled"
+                @input="previewShape('fill', 'opacity', numberValue($event))"
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+              <output>{{ Math.round(node.style.fill.opacity * 100) }}%</output>
+            </div>
+          </section>
+
+          <section
+            v-if="node.type === 'line' || node.type === 'arrow'"
+            class="property-section"
+          >
+            <div class="slider-heading">
+              <h3>线条 / Line</h3>
+              <output>{{ Math.round(node.stroke.width) }} px</output>
+            </div>
+            <div class="style-row">
+              <input
+                :value="node.stroke.color"
+                type="color"
+                aria-label="线条颜色 / Line color"
+                @input="previewLinear('color', ($event.target as HTMLInputElement).value)"
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+              <input
+                :value="node.stroke.width"
+                type="range"
+                min="1"
+                max="40"
+                step="1"
+                aria-label="线条宽度 / Line width"
+                @input="previewLinear('width', numberValue($event))"
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+            </div>
+          </section>
+
+          <section v-if="node.type === 'freehand'" class="property-section">
+            <div class="slider-heading">
+              <h3>笔触 / Stroke</h3>
+              <output>{{ Math.round(node.strokeWidth) }} px</output>
+            </div>
+            <div class="style-row">
+              <input
+                :value="node.color"
+                type="color"
+                aria-label="笔触颜色 / Stroke color"
+                @input="previewFreehand('color', ($event.target as HTMLInputElement).value)"
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+              <input
+                :value="node.strokeWidth"
+                type="range"
+                min="1"
+                max="80"
+                step="1"
+                aria-label="笔触宽度 / Stroke width"
+                @input="previewFreehand('strokeWidth', numberValue($event))"
+                @change="finishPreview"
+                @blur="finishPreview"
               />
             </div>
           </section>
@@ -353,6 +495,7 @@ const canvasPresets = [
             <label class="text-field">
               <span>文字 / Text</span>
               <textarea
+                ref="textInputRef"
                 :value="node.text"
                 rows="3"
                 @change="updateText('text', ($event.target as HTMLTextAreaElement).value)"
@@ -372,7 +515,10 @@ const canvasPresets = [
                 <input
                   :value="node.color"
                   type="color"
-                  @change="updateText('color', ($event.target as HTMLInputElement).value)"
+                  aria-label="文字颜色 / Text color"
+                  @input="preview({ color: ($event.target as HTMLInputElement).value } as Partial<TextNode>)"
+                  @change="finishPreview"
+                  @blur="finishPreview"
                 />
               </label>
             </div>
@@ -501,11 +647,13 @@ const canvasPresets = [
                   :disabled="
                     store.document.canvas.background.type === 'transparent'
                   "
-                  @change="
-                    store.setCanvasBackgroundColor(
+                  @input="
+                    store.previewCanvasBackgroundColor(
                       ($event.target as HTMLInputElement).value,
                     )
                   "
+                  @change="finishPreview"
+                  @blur="finishPreview"
                 />
                 <output>{{ canvasColor.toUpperCase() }}</output>
               </span>
