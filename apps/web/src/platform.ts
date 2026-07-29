@@ -10,7 +10,6 @@ export const platformKey = Symbol("platform") as InjectionKey<ImageToolBoxPlatfo
 
 const webPlatform: ImageToolBoxPlatform = {
   apiVersion: PLATFORM_API_VERSION,
-  kind: "web",
   capabilities: {
     nativeFileDialogs: false,
     directFileWrite: false,
@@ -53,17 +52,13 @@ const webPlatform: ImageToolBoxPlatform = {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     return { saved: true };
   },
+  onMenuCommand() {
+    return () => {};
+  },
 };
 
 export function resolvePlatform(): ImageToolBoxPlatform {
-  const bridge = window.imageToolBoxDesktop;
-  if (!bridge || bridge.apiVersion !== PLATFORM_API_VERSION) return webPlatform;
-  return {
-    apiVersion: PLATFORM_API_VERSION,
-    kind: "electron",
-    capabilities: bridge.capabilities,
-    openFiles: (options) => bridge.openFiles(options),
-    saveFile: (request) => bridge.saveFile(request),
-  };
+  const platform = window.imageToolBoxPlatform;
+  if (platform?.apiVersion === PLATFORM_API_VERSION) return platform;
+  return webPlatform;
 }
-

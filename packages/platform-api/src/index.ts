@@ -24,25 +24,28 @@ export type SaveFileRequest = {
   filters?: Array<{ name: string; extensions: string[] }>;
 };
 
-export interface ImageToolBoxPlatform {
-  readonly apiVersion: typeof PLATFORM_API_VERSION;
-  readonly kind: "web" | "electron";
-  readonly capabilities: PlatformCapabilities;
-  openFiles(options: {
-    accept: string;
-    multiple: boolean;
-  }): Promise<OpenedFile[]>;
-  saveFile(request: SaveFileRequest): Promise<{ saved: boolean; path?: string }>;
-}
-
-export type DesktopBridge = {
-  apiVersion: typeof PLATFORM_API_VERSION;
-  capabilities: PlatformCapabilities;
-  openFiles(options: {
-    accept: string;
-    multiple: boolean;
-  }): Promise<OpenedFile[]>;
-  saveFile(request: SaveFileRequest): Promise<{ saved: boolean; path?: string }>;
-  onMenuCommand(callback: (command: string) => void): () => void;
+export type OpenFileOptions = {
+  accept: string;
+  multiple: boolean;
 };
 
+export type SaveFileResult = {
+  saved: boolean;
+  path?: string;
+};
+
+export type MenuCommand =
+  | "import"
+  | "open-project"
+  | "save-project"
+  | "export"
+  | "undo"
+  | "redo";
+
+export interface ImageToolBoxPlatform {
+  readonly apiVersion: typeof PLATFORM_API_VERSION;
+  readonly capabilities: PlatformCapabilities;
+  openFiles(options: OpenFileOptions): Promise<OpenedFile[]>;
+  saveFile(request: SaveFileRequest): Promise<SaveFileResult>;
+  onMenuCommand(callback: (command: MenuCommand) => void): () => void;
+}

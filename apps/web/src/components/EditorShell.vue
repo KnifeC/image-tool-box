@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, onBeforeUnmount, onMounted, ref } from "vue";
 import { Layers3, SlidersHorizontal } from "lucide-vue-next";
+import type { MenuCommand } from "@imagetoolbox/platform-api";
 import { platformKey } from "../platform";
 import { useEditorStore } from "../stores/editor";
 import BottomBar from "./BottomBar.vue";
@@ -51,7 +52,7 @@ function keyboard(event: KeyboardEvent) {
   }
 }
 
-function handleMenuCommand(command: string) {
+function handleMenuCommand(command: MenuCommand) {
   if (command === "import") void importImages();
   if (command === "open-project") void store.openProject(platform);
   if (command === "save-project") void store.saveProject(platform);
@@ -75,9 +76,7 @@ function onDrop(event: DragEvent) {
 onMounted(async () => {
   window.addEventListener("keydown", keyboard);
   await store.restoreOrDemo();
-  if (window.imageToolBoxDesktop) {
-    removeMenuListener = window.imageToolBoxDesktop.onMenuCommand(handleMenuCommand);
-  }
+  removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
 
 onBeforeUnmount(() => {

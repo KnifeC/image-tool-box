@@ -12,6 +12,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import type { MenuCommand } from "@imagetoolbox/platform-api";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -81,7 +82,8 @@ function createWindow() {
 }
 
 function installMenu() {
-  const send = (command: string) => mainWindow?.webContents.send("menu:command", command);
+  const send = (command: MenuCommand) =>
+    mainWindow?.webContents.send("menu:command", command);
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {

@@ -1,7 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DesktopBridge, SaveFileRequest } from "@imagetoolbox/platform-api";
+import type {
+  ImageToolBoxPlatform,
+  MenuCommand,
+  SaveFileRequest,
+} from "@imagetoolbox/platform-api";
 
-const bridge: DesktopBridge = {
+const electronPlatform: ImageToolBoxPlatform = {
   apiVersion: 1,
   capabilities: {
     nativeFileDialogs: true,
@@ -20,10 +24,11 @@ const bridge: DesktopBridge = {
     return ipcRenderer.invoke("files:save", request);
   },
   onMenuCommand(callback) {
-    const listener = (_event: Electron.IpcRendererEvent, command: string) => callback(command);
+    const listener = (_event: Electron.IpcRendererEvent, command: MenuCommand) =>
+      callback(command);
     ipcRenderer.on("menu:command", listener);
     return () => ipcRenderer.removeListener("menu:command", listener);
   },
 };
 
-contextBridge.exposeInMainWorld("imageToolBoxDesktop", bridge);
+contextBridge.exposeInMainWorld("imageToolBoxPlatform", electronPlatform);
