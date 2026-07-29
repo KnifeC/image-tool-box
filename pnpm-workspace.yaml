@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - electron
+  - electron-winstaller
+  - esbuild
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+patchedDependencies:
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch

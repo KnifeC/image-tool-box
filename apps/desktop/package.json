@@ -1,0 +1,78 @@
+{
+  "name": "@imagetoolbox/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "pnpm build && wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "tsup src/main.ts src/preload.ts --format cjs --out-dir dist --clean --sourcemap --external electron",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dist:win": "pnpm build && electron-builder --win portable --x64",
+    "dist:mac": "pnpm build && electron-builder --mac dmg zip --x64 --arm64",
+    "dist:linux": "pnpm build && electron-builder --linux AppImage deb --x64"
+  },
+  "dependencies": {
+    "@imagetoolbox/platform-api": "workspace:*",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "cross-env": "^7.0.3",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.imagetoolbox.app",
+    "productName": "ImageToolBox",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist-desktop",
+        "to": "renderer"
+      }
+    ],
+    "directories": {
+      "output": "../../out",
+      "buildResources": "build"
+    },
+    "icon": "build/icon.png",
+    "artifactName": "ImageToolBox-${version}-${os}-${arch}-${name}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "ImageToolBox-${version}-win-${arch}-portable.${ext}",
+      "requestExecutionLevel": "user"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.graphics-design"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Graphics"
+    }
+  }
+}

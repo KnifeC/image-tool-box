@@ -1,0 +1,22 @@
+{
+  "name": "@imagetoolbox/project-format",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@imagetoolbox/editor-core": "workspace:*",
+    "@zip.js/zip.js": "^2.7.60",
+    "idb": "^8.0.3",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
+

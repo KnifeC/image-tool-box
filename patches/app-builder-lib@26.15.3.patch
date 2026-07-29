@@ -1,0 +1,46 @@
+diff --git a/out/binDownload.js b/out/binDownload.js
+index 287e8735e53970c9787253e85b5980988719a668..0b438da47d80721127ab3191e092ea3429f5fc31 100644
+--- a/out/binDownload.js
++++ b/out/binDownload.js
+@@ -19,12 +19,11 @@ async function download(url, output, checksum) {
+         // Callers should supply a checksum whenever possible.
+         builder_util_1.log.warn({ url }, "downloading without an integrity checksum — the download is not verified against a known-good hash");
+     }
+-    const { downloadArtifact, ElectronDownloadCacheMode } = await (0, dynamicImport_1.dynamicImport)("@electron/get");
++    const { downloadArtifact } = await (0, dynamicImport_1.dynamicImport)("@electron/get");
+     const downloadedFile = await downloadArtifact({
+         version: "9.9.9",
+         artifactName: filenameWithExt,
+         cacheRoot: path.resolve((0, electronGet_1.getCacheDirectory)({ allowEnvVarOverride: true }), "downloads"),
+-        cacheMode: ElectronDownloadCacheMode.ReadWrite,
+         ...(checksum != null ? { checksums: { [filenameWithExt]: checksum } } : { unsafelyDisableChecksums: true }),
+         mirrorOptions: { resolveAssetURL: async () => Promise.resolve(url) },
+         isGeneric: true,
+diff --git a/out/util/electronGet.js b/out/util/electronGet.js
+index a941f9d20c10ca58a84b9a600b0df468631aae01..2cc14d49ce6cc43636eedb08f6c09d9c2d20f5d9 100644
+--- a/out/util/electronGet.js
++++ b/out/util/electronGet.js
+@@ -61,12 +61,12 @@ function resolveCacheMode() {
+     var _a;
+     const varName = "ELECTRON_DOWNLOAD_CACHE_MODE";
+     const cacheOverride = (_a = process.env[varName]) === null || _a === void 0 ? void 0 : _a.trim();
+-    if (cacheOverride && Number(cacheOverride) in get_1.ElectronDownloadCacheMode) {
++    if (cacheOverride && Number.isFinite(Number(cacheOverride))) {
+         const mode = Number(cacheOverride);
+         builder_util_1.log.debug({ mode }, `cache mode overridden via env var ${varName}`);
+         return mode;
+     }
+-    return get_1.ElectronDownloadCacheMode.ReadWrite;
++    return undefined;
+ }
+ async function extractZipStreaming(file, dir) {
+     var _a;
+@@ -271,7 +271,7 @@ async function downloadArtifactToFile(config, label) {
+         }
+         if (!(await (0, builder_util_1.exists)(filePath))) {
+             builder_util_1.log.warn({ filePath, label }, "cached artifact missing from disk; retrying with cache write");
+-            filePath = await get.downloadArtifact({ ...configWithProgress, cacheMode: get_1.ElectronDownloadCacheMode.WriteOnly });
++            filePath = await get.downloadArtifact(configWithProgress);
+         }
+         if (!state.bar && lastLoggedMilestone === -1) {
+             builder_util_1.log.info({ label }, "using cached artifact");
