@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Eye,
   EyeOff,
   Lock,
@@ -28,6 +29,8 @@ const node = computed(() => store.primaryNode);
 const activeCreationTool = computed(() =>
   isCreationTool(store.tool) ? store.tool : null,
 );
+const propertiesOpen = ref(true);
+const layersOpen = ref(true);
 const textInputRef = ref<HTMLTextAreaElement | null>(null);
 const canvasColor = computed(() =>
   store.document.canvas.background.type === "color"
@@ -60,6 +63,14 @@ watch(
   },
 );
 
+watch(
+  () => store.mobilePanel,
+  (panel) => {
+    if (panel === "properties") propertiesOpen.value = true;
+    if (panel === "layers") layersOpen.value = true;
+  },
+);
+
 function numberValue(event: Event) {
   return Number((event.target as HTMLInputElement).value);
 }
@@ -74,6 +85,12 @@ function preview(patch: Partial<SceneNode>) {
 
 function finishPreview() {
   store.commitPreviewEdit();
+}
+
+function selectLayer(layerId: string, additive = false) {
+  store.setTool("select");
+  store.select(layerId, additive);
+  propertiesOpen.value = true;
 }
 
 function updateImageBorder(key: "enabled" | "color" | "width", value: boolean | string | number) {
@@ -238,24 +255,27 @@ const canvasPresets = [
     </template>
 
     <template v-else>
-      <div class="inspector-tabs">
-        <button
-          type="button"
-          :class="{ active: store.inspectorTab === 'properties' }"
-          @click="store.inspectorTab = 'properties'"
+      <div class="inspector-stack">
+        <section
+          class="inspector-accordion properties-accordion"
+          :class="{ open: propertiesOpen }"
         >
-          属性 / Properties
-        </button>
-        <button
-          type="button"
-          :class="{ active: store.inspectorTab === 'layers' }"
-          @click="store.inspectorTab = 'layers'"
-        >
-          图层 / Layers
-        </button>
-      </div>
+          <button
+            class="inspector-section-toggle"
+            type="button"
+            :aria-expanded="propertiesOpen"
+            aria-controls="inspector-properties"
+            @click="propertiesOpen = !propertiesOpen"
+          >
+            <span>属性 / Properties</span>
+            <ChevronDown :size="18" :class="{ rotated: propertiesOpen }" />
+          </button>
 
-      <div v-if="store.inspectorTab === 'properties'" class="panel-scroll">
+          <div
+            v-show="propertiesOpen"
+            id="inspector-properties"
+            class="panel-scroll inspector-section-content"
+          >
         <ToolOptionsPanel v-if="activeCreationTool" />
         <template v-else-if="node">
           <section class="property-section">
@@ -660,9 +680,29 @@ const canvasPresets = [
             </label>
           </section>
         </div>
-      </div>
+          </div>
+        </section>
 
-      <div v-else class="panel-scroll layers-panel">
+        <section
+          class="inspector-accordion layers-accordion"
+          :class="{ open: layersOpen }"
+        >
+          <button
+            class="inspector-section-toggle"
+            type="button"
+            :aria-expanded="layersOpen"
+            aria-controls="inspector-layers"
+            @click="layersOpen = !layersOpen"
+          >
+            <span>图层 / Layers</span>
+            <ChevronDown :size="18" :class="{ rotated: layersOpen }" />
+          </button>
+
+          <div
+            v-show="layersOpen"
+            id="inspector-layers"
+            class="panel-scroll layers-panel inspector-section-content"
+          >
         <div class="layers-heading">
           <span>{{ store.nodes.length + 1 }} 个图层</span>
           <button type="button" :disabled="!node" @click="store.deleteSelected">
@@ -675,7 +715,7 @@ const canvasPresets = [
           class="layer-row"
           :class="{ selected: store.selectedIds.includes(layer.id) }"
           type="button"
-          @click="store.select(layer.id, $event.shiftKey)"
+          @click="selectLayer(layer.id, $event.shiftKey)"
         >
           <span
             class="layer-icon-action"
@@ -702,7 +742,7 @@ const canvasPresets = [
           class="layer-row background-layer-row"
           :class="{ selected: store.backgroundSelected }"
           type="button"
-          @click="store.select(store.document.canvas.background.id)"
+          @click="selectLayer(store.document.canvas.background.id)"
         >
           <span
             class="layer-icon-action"
@@ -737,6 +777,8 @@ const canvasPresets = [
             下移
           </button>
         </div>
+          </div>
+        </section>
       </div>
     </template>
   </aside>

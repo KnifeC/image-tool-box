@@ -116,11 +116,11 @@ onBeforeUnmount(() => {
     <BottomBar />
 
     <div class="mobile-panel-actions">
-      <button type="button" @click="store.mobilePanel = 'properties'; store.inspectorTab = 'properties'">
+      <button type="button" @click="store.mobilePanel = 'properties'">
         <SlidersHorizontal :size="19" />
         属性
       </button>
-      <button type="button" @click="store.mobilePanel = 'layers'; store.inspectorTab = 'layers'">
+      <button type="button" @click="store.mobilePanel = 'layers'">
         <Layers3 :size="19" />
         图层
       </button>

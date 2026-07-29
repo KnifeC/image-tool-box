@@ -367,38 +367,67 @@ textarea:focus-visible {
   border-left: 1px solid var(--border);
 }
 
-.inspector-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  flex: 0 0 50px;
+.inspector-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: clip;
+}
+
+.inspector-accordion {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-height: 48px;
   border-bottom: 1px solid var(--border);
 }
 
-.inspector-tabs button {
-  position: relative;
-  background: transparent;
+.inspector-accordion.open {
+  flex: 1 1 50%;
+  min-height: 0;
+}
+
+.properties-accordion.open {
+  flex-basis: 58%;
+}
+
+.layers-accordion.open {
+  flex-basis: 42%;
+}
+
+.inspector-section-toggle {
+  display: flex;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 20px 0 24px;
+  color: var(--text);
+  background: #fafbfc;
   border: 0;
-  font-size: 15px;
   cursor: pointer;
-}
-
-.inspector-tabs button::after {
-  position: absolute;
-  right: 12px;
-  bottom: -1px;
-  left: 12px;
-  height: 2px;
-  content: "";
-  background: transparent;
-}
-
-.inspector-tabs button.active {
-  color: var(--accent);
+  font-size: 14px;
   font-weight: 650;
+  text-align: left;
 }
 
-.inspector-tabs button.active::after {
-  background: var(--accent);
+.inspector-section-toggle:hover {
+  color: var(--accent);
+  background: #f6f8ff;
+}
+
+.inspector-section-toggle svg {
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.inspector-section-toggle svg.rotated {
+  transform: rotate(180deg);
+}
+
+.inspector-section-content {
+  flex: 1;
 }
 
 .panel-scroll {
@@ -1301,8 +1330,13 @@ select:disabled {
     border-radius: 8px;
   }
 
-  .inspector-tabs {
-    padding-right: 56px;
+  .inspector-stack {
+    padding-top: 58px;
+  }
+
+  .inspector-section-toggle {
+    padding-right: 22px;
+    padding-left: 22px;
   }
 
   .mobile-panel-actions {
