@@ -56,6 +56,10 @@ const i18n = createI18n({
         layers: "图层",
         tools: "编辑工具",
       },
+      clipboard: {
+        imported: "已从剪切板导入图片",
+        importFailed: "剪切板图片导入失败",
+      },
       status: {
         zoomOut: "缩小",
         zoom: "缩放",
@@ -223,6 +227,10 @@ const i18n = createI18n({
         properties: "Properties",
         layers: "Layers",
         tools: "Editing tools",
+      },
+      clipboard: {
+        imported: "Image pasted from clipboard",
+        importFailed: "Could not import the clipboard image",
       },
       status: {
         zoomOut: "Zoom out",

@@ -384,11 +384,14 @@ const canvasPresets = computed(() => [
 <template>
   <aside
     class="inspector"
-    :class="{ 'mobile-open': store.mobilePanel !== null }"
+    :class="{
+      'mobile-open': store.mobilePanel !== null,
+      'crop-mode': store.tool === 'crop' && store.selectedImage,
+    }"
     :aria-label="t('inspector.label')"
   >
     <button
-      v-if="store.mobilePanel"
+      v-if="store.mobilePanel && store.tool !== 'crop'"
       class="mobile-panel-close"
       type="button"
       :aria-label="t('inspector.close')"

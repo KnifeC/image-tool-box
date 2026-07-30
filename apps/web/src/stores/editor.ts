@@ -162,6 +162,7 @@ export const useEditorStore = defineStore("editor", () => {
 
   function setTool(next: EditorTool) {
     if (tool.value === "crop" && next !== "crop") cancelCrop();
+    if (next === "crop") mobilePanel.value = null;
     tool.value = next;
     if (
       next === "text" ||
@@ -1147,6 +1148,7 @@ export const useEditorStore = defineStore("editor", () => {
     transformBackground,
     setTemporaryPan,
     fitCanvas,
+    showToast,
     importFiles,
     addNode,
     addTextAt,

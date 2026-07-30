@@ -5,6 +5,10 @@ import { Layers3, SlidersHorizontal } from "lucide-vue-next";
 import type { MenuCommand } from "@imagetoolbox/platform-api";
 import { platformKey } from "../platform";
 import { useEditorStore } from "../stores/editor";
+import {
+  getClipboardImageFiles,
+  toOpenedClipboardImages,
+} from "../clipboard";
 import BottomBar from "./BottomBar.vue";
 import CanvasStage from "./CanvasStage.vue";
 import ExportDialog from "./ExportDialog.vue";
@@ -100,9 +104,24 @@ function onDrop(event: DragEvent) {
   ).then(store.importFiles);
 }
 
+function onPaste(event: ClipboardEvent) {
+  const imageFiles = getClipboardImageFiles(event.clipboardData);
+  if (!imageFiles.length) return;
+
+  event.preventDefault();
+  void toOpenedClipboardImages(imageFiles)
+    .then(store.importFiles)
+    .then(() => store.showToast(t("clipboard.imported")))
+    .catch((error) => {
+      console.error(error);
+      store.showToast(t("clipboard.importFailed"));
+    });
+}
+
 onMounted(() => {
   window.addEventListener("keydown", keyboard);
   window.addEventListener("keyup", keyboardUp);
+  window.addEventListener("paste", onPaste);
   window.addEventListener("blur", releaseTemporaryPan);
   removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
@@ -120,6 +139,7 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyboard);
   window.removeEventListener("keyup", keyboardUp);
+  window.removeEventListener("paste", onPaste);
   window.removeEventListener("blur", releaseTemporaryPan);
   removeMenuListener?.();
 });
@@ -128,7 +148,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-shell" @dragover.prevent @drop="onDrop">
     <TopBar :on-export="() => (exportOpen = true)" />
-    <div class="editor-grid">
+    <div class="editor-grid" :class="{ 'crop-active': store.tool === 'crop' }">
       <ToolRail @import="importImages" />
       <CanvasStage />
       <InspectorPanel />
