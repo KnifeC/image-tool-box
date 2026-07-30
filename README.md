@@ -1,30 +1,26 @@
 # ImageToolBox
 
-ImageToolBox 是一款本地优先的轻量图片编辑工具。同一套 Vue 前端既可以构建为纯静态 PWA，也可以由 Electron 轻量包装为桌面客户端。
+一个轻量、隐私友好的图片编辑工具。图片处理在本地完成，可直接运行在浏览器中，也可打包为桌面应用。
 
-## V1 功能
+## 能做什么
 
-- 图片导入、拖放和多图画布
-- 选择、缩放、旋转、移动和图层排序
-- 非破坏性裁剪与常用比例
-- 文本、矩形、椭圆、直线、箭头、画笔和荧光笔
-- PNG、JPG、WebP 导出
-- IndexedDB 自动保存
-- `.ibox` 工程导入与导出
-- 桌面端原生打开/保存对话框与菜单
+- 导入或拖放多张图片，自由移动、缩放、旋转和调整图层
+- 无损裁剪，支持常用画面比例
+- 添加文字、矩形、椭圆、直线、箭头、画笔和荧光笔
+- 自动保存编辑进度，支持撤销与重做
+- 保存、打开 `.ibox` 工程文件
+- 导出 PNG、JPG 或 WebP，可选择倍率和导出范围
 
-所有图像处理均在本地完成。
+## 本地运行
 
-## 开发
-
-需要 Node.js、pnpm。
+请先安装 Node.js 和 pnpm，然后执行：
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-启动带热更新的 Electron 开发环境：
+浏览器访问终端中显示的地址即可使用。运行桌面版开发环境：
 
 ```bash
 pnpm dev:desktop
@@ -33,20 +29,12 @@ pnpm dev:desktop
 ## 构建
 
 ```bash
-pnpm build:web
-pnpm dist:win
+pnpm build:web   # 构建 Web / PWA
+pnpm dist:win    # 打包 Windows 便携版
 ```
 
-- 静态 Web/PWA 输出：`apps/web/dist`
-- Windows x64 便携包输出：`out/ImageToolBox-0.1.0-win-x64-portable.exe`
-- macOS 和 Linux 的打包配置已经保留，需在对应系统执行 `pnpm dist:mac` 或 `pnpm dist:linux`
+macOS 和 Linux 可分别使用 `pnpm dist:mac`、`pnpm dist:linux`，需要在对应系统上执行。
 
-## 架构
+## 技术栈
 
-- `apps/web`：Vue、Pinia、Konva 编辑器与 PWA
-- `apps/desktop`：Electron 主进程、预加载桥接与安全 IPC
-- `packages/editor-core`：文档模型、命令与撤销/重做
-- `packages/project-format`：IndexedDB 与 `.ibox` 工程格式
-- `packages/platform-api`：版本化平台能力接口
-
-Web 层只依赖 `platform-api`，不会直接访问 Node.js。未来可在 Electron 侧增加 Sharp、文件夹批处理、后台任务和大图模式，而不改动编辑器核心。
+Vue 3、TypeScript、Pinia、Konva、Vite、Electron，使用 pnpm workspace 管理。
