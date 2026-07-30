@@ -317,6 +317,8 @@ textarea:focus-visible {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
   background:
     radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.6), transparent 58%),
     var(--workspace);
@@ -342,6 +344,12 @@ textarea:focus-visible {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.workspace-empty .workspace-empty-hint {
+  margin-top: -7px;
+  color: #8a92a3;
+  font-size: 12px;
 }
 
 .workspace-empty button {

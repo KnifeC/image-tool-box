@@ -4,6 +4,10 @@ import type Konva from "konva";
 import { FolderOpen } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { rectFromPoints } from "@imagetoolbox/editor-core";
+import {
+  calculatePinchViewport,
+  type ViewportPoint,
+} from "../canvas-viewport";
 import { useEditorStore } from "../stores/editor";
 
 const store = useEditorStore();
@@ -41,6 +45,11 @@ const panStart = ref<{
   pointer: { x: number; y: number };
   offset: { x: number; y: number };
 } | null>(null);
+const touchNavigationActive = ref(false);
+let pinchState: {
+  center: ViewportPoint;
+  distance: number;
+} | null = null;
 let resizeObserver: ResizeObserver | null = null;
 const checkerboardPattern = createCheckerboardPattern();
 
@@ -188,15 +197,17 @@ onMounted(() => {
   });
   if (wrapper.value) resizeObserver.observe(wrapper.value);
   window.addEventListener("mouseup", finishGesture);
-  window.addEventListener("touchend", finishGesture);
-  window.addEventListener("blur", cancelGesture);
+  window.addEventListener("touchend", onWindowTouchEnd);
+  window.addEventListener("touchcancel", onWindowTouchEnd);
+  window.addEventListener("blur", cancelAllGestures);
 });
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   window.removeEventListener("mouseup", finishGesture);
-  window.removeEventListener("touchend", finishGesture);
-  window.removeEventListener("blur", cancelGesture);
+  window.removeEventListener("touchend", onWindowTouchEnd);
+  window.removeEventListener("touchcancel", onWindowTouchEnd);
+  window.removeEventListener("blur", cancelAllGestures);
 });
 
 function imageFor(assetId: string) {
@@ -219,6 +230,136 @@ function onWheel(event: any) {
   store.viewOffset.x += mousePoint.x * (previous - next);
   store.viewOffset.y += mousePoint.y * (previous - next);
   store.zoom = next;
+}
+
+function onStageTouchStart(event: any) {
+  const touchEvent = event.evt as TouchEvent;
+  if (touchEvent.touches.length < 2 && !touchNavigationActive.value) {
+    onStagePointerDown(event);
+    return;
+  }
+
+  touchEvent.preventDefault();
+  if (!touchNavigationActive.value) {
+    touchNavigationActive.value = true;
+    cancelGesture();
+    stopActiveDrags(event.target.getStage());
+  }
+  pinchState = pinchDetails(event.target.getStage(), touchEvent.touches);
+}
+
+function onStageTouchMove(event: any) {
+  const touchEvent = event.evt as TouchEvent;
+  if (!touchNavigationActive.value && touchEvent.touches.length < 2) {
+    onStagePointerMove(event);
+    return;
+  }
+
+  touchEvent.preventDefault();
+  if (!touchNavigationActive.value) {
+    touchNavigationActive.value = true;
+    cancelGesture();
+    stopActiveDrags(event.target.getStage());
+  }
+
+  const stage = event.target.getStage() as Konva.Stage;
+  const current = pinchDetails(stage, touchEvent.touches);
+  if (!current) {
+    pinchState = null;
+    return;
+  }
+  if (!pinchState || pinchState.distance === 0 || current.distance === 0) {
+    pinchState = current;
+    return;
+  }
+
+  const viewport = calculatePinchViewport({
+    zoom: store.zoom,
+    layerPosition: stagePosition.value,
+    fitOrigin: fitOrigin.value,
+    previousCenter: pinchState.center,
+    currentCenter: current.center,
+    scaleFactor: current.distance / pinchState.distance,
+    minZoom: 0.1,
+    maxZoom: 3,
+  });
+  store.zoom = viewport.zoom;
+  store.viewOffset.x = viewport.viewOffset.x;
+  store.viewOffset.y = viewport.viewOffset.y;
+  pinchState = current;
+}
+
+function onStageTouchEnd(event: any) {
+  const touchEvent = event.evt as TouchEvent;
+  if (!touchNavigationActive.value) {
+    finishGesture();
+    return;
+  }
+
+  touchEvent.preventDefault();
+  if (touchEvent.touches.length >= 2) {
+    pinchState = pinchDetails(event.target.getStage(), touchEvent.touches);
+  } else if (touchEvent.touches.length === 0) {
+    endTouchNavigation();
+  } else {
+    pinchState = null;
+  }
+}
+
+function onWindowTouchEnd(event: TouchEvent) {
+  if (!touchNavigationActive.value) {
+    finishGesture();
+    return;
+  }
+  if (event.touches.length === 0) endTouchNavigation();
+}
+
+function endTouchNavigation() {
+  touchNavigationActive.value = false;
+  pinchState = null;
+}
+
+function cancelAllGestures() {
+  cancelGesture();
+  endTouchNavigation();
+}
+
+function pinchDetails(
+  stage: Konva.Stage,
+  touches: TouchList,
+): { center: ViewportPoint; distance: number } | null {
+  const first = touches.item(0);
+  const second = touches.item(1);
+  if (!first || !second) return null;
+
+  const bounds = stage.container().getBoundingClientRect();
+  const scaleX = bounds.width > 0 ? stage.width() / bounds.width : 1;
+  const scaleY = bounds.height > 0 ? stage.height() / bounds.height : 1;
+  const firstPoint = {
+    x: (first.clientX - bounds.left) * scaleX,
+    y: (first.clientY - bounds.top) * scaleY,
+  };
+  const secondPoint = {
+    x: (second.clientX - bounds.left) * scaleX,
+    y: (second.clientY - bounds.top) * scaleY,
+  };
+
+  return {
+    center: {
+      x: (firstPoint.x + secondPoint.x) / 2,
+      y: (firstPoint.y + secondPoint.y) / 2,
+    },
+    distance: Math.hypot(
+      secondPoint.x - firstPoint.x,
+      secondPoint.y - firstPoint.y,
+    ),
+  };
+}
+
+function stopActiveDrags(stage: Konva.Stage) {
+  const draggingNodes = stage.find((node: Konva.Node) => node.isDragging());
+  for (const node of draggingNodes) node.stopDrag();
+  if (stage.isDragging()) stage.stopDrag();
 }
 
 function onStagePointerDown(event: any) {
@@ -371,6 +512,7 @@ function documentPoint(stage: Konva.Stage) {
 
 function selectNode(event: any, id: string) {
   if (store.tool !== "select") return;
+  if (((event.evt as TouchEvent | undefined)?.touches?.length ?? 0) > 1) return;
   event.cancelBubble = true;
   store.select(id, Boolean(event.evt?.shiftKey));
 }
@@ -482,11 +624,12 @@ function createCheckerboardPattern() {
       :config="{ width: size.width, height: size.height }"
       @wheel="onWheel"
       @mousedown="onStagePointerDown"
-      @touchstart="onStagePointerDown"
+      @touchstart="onStageTouchStart"
       @mousemove="onStagePointerMove"
-      @touchmove="onStagePointerMove"
+      @touchmove="onStageTouchMove"
       @mouseup="finishGesture"
-      @touchend="finishGesture"
+      @touchend="onStageTouchEnd"
+      @touchcancel="onStageTouchEnd"
     >
       <v-layer
         :config="{
@@ -993,6 +1136,7 @@ function createCheckerboardPattern() {
         <FolderOpen :size="19" />
         {{ store.testProjectLoading ? t("canvas.opening") : t("canvas.openTestProject") }}
       </button>
+      <p class="workspace-empty-hint">{{ t("canvas.startDirectly") }}</p>
     </div>
     <div v-if="store.tool === 'crop'" class="crop-mode-label">
       {{ t("canvas.cropMode") }}
