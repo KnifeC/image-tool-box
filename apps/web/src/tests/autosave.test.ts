@@ -57,6 +57,35 @@ afterEach(() => {
 });
 
 describe("editor local draft lifecycle", () => {
+  it("renames regular and background layers through undoable history", async () => {
+    const store = useEditorStore();
+    store.addNode("rectangle");
+    const layer = store.document.nodes[0];
+    expect(layer).toBeDefined();
+
+    store.renameLayer(layer!.id, "  Hero image  ");
+    expect(store.document.nodes.find(({ id }) => id === layer!.id)?.name).toBe(
+      "Hero image",
+    );
+
+    store.undo();
+    expect(store.document.nodes.find(({ id }) => id === layer!.id)?.name).toBe(
+      "矩形 / Rectangle",
+    );
+    store.redo();
+    expect(store.document.nodes.find(({ id }) => id === layer!.id)?.name).toBe(
+      "Hero image",
+    );
+
+    const backgroundId = store.document.canvas.background.id;
+    store.renameLayer(backgroundId, "Backdrop");
+    expect(store.document.canvas.background.name).toBe("Backdrop");
+
+    store.renameLayer(backgroundId, "   ");
+    expect(store.document.canvas.background.name).toBe("Backdrop");
+    await store.flushAutosave();
+  });
+
   it("autosaves, restores, and replaces the last local project", async () => {
     const store = useEditorStore();
     const previousProjectId = store.document.id;

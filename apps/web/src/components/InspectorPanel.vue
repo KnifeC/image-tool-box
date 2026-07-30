@@ -10,6 +10,7 @@ import {
   GripHorizontal,
   GripVertical,
   Lock,
+  Pencil,
   Trash2,
   Unlock,
   X,
@@ -41,6 +42,8 @@ const panelResizing = ref(false);
 const draggedLayerId = ref<string | null>(null);
 const layerDropTargetId = ref<string | null>(null);
 const layerDropPosition = ref<"above" | "below">("above");
+const renamingLayerId = ref<string | null>(null);
+const layerNameDraft = ref("");
 let layerPointerDrag: {
   layerId: string;
   pointerId: number;
@@ -296,6 +299,41 @@ function handleLayerClick(layerId: string, additive: boolean) {
     return;
   }
   selectLayer(layerId, additive);
+}
+
+async function startLayerRename(layerId: string, currentName: string) {
+  selectLayer(layerId);
+  renamingLayerId.value = layerId;
+  layerNameDraft.value = currentName;
+  await nextTick();
+  const input = document.querySelector<HTMLInputElement>(".layer-name-input");
+  input?.focus();
+  input?.select();
+}
+
+function commitLayerRename() {
+  const layerId = renamingLayerId.value;
+  if (!layerId) return;
+  store.renameLayer(layerId, layerNameDraft.value);
+  renamingLayerId.value = null;
+}
+
+function cancelLayerRename() {
+  renamingLayerId.value = null;
+}
+
+function handleLayerKeydown(
+  event: KeyboardEvent,
+  layerId: string,
+  currentName: string,
+) {
+  if (event.key === "F2") {
+    event.preventDefault();
+    void startLayerRename(layerId, currentName);
+  } else if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    selectLayer(layerId, event.shiftKey);
+  }
 }
 
 function clearLayerDrag() {
@@ -974,7 +1012,7 @@ const canvasPresets = computed(() => [
             <Trash2 :size="16" />
           </button>
         </div>
-        <button
+        <div
           v-for="layer in [...store.nodes].reverse()"
           :key="layer.id"
           class="layer-row"
@@ -986,11 +1024,13 @@ const canvasPresets = computed(() => [
             'drag-over-below':
               layerDropTargetId === layer.id && layerDropPosition === 'below',
           }"
-          type="button"
+          role="button"
+          tabindex="0"
           :data-layer-id="layer.id"
           :aria-label="t('inspector.layerDragLabel', { name: layer.name })"
           @pointerdown="prepareLayerPointerDrag($event, layer.id)"
           @click="handleLayerClick(layer.id, $event.shiftKey)"
+          @keydown="handleLayerKeydown($event, layer.id, layer.name)"
         >
           <span
             class="layer-drag-handle"
@@ -1008,7 +1048,37 @@ const canvasPresets = computed(() => [
             <EyeOff v-else :size="17" />
           </span>
           <span class="layer-type">{{ layer.type.slice(0, 1).toUpperCase() }}</span>
-          <span class="layer-name">{{ layer.name }}</span>
+          <input
+            v-if="renamingLayerId === layer.id"
+            v-model="layerNameDraft"
+            class="layer-name-input"
+            :aria-label="t('inspector.layerNameInput')"
+            maxlength="120"
+            @pointerdown.stop
+            @click.stop
+            @dblclick.stop
+            @keydown.enter.prevent.stop="commitLayerRename"
+            @keydown.esc.prevent.stop="cancelLayerRename"
+            @blur="commitLayerRename"
+          />
+          <span
+            v-else
+            class="layer-name"
+            :title="t('inspector.renameLayerHint')"
+            @dblclick.stop="startLayerRename(layer.id, layer.name)"
+          >
+            {{ layer.name }}
+          </span>
+          <button
+            class="layer-icon-action"
+            type="button"
+            :title="t('inspector.renameLayer')"
+            :aria-label="t('inspector.renameLayer')"
+            @click.stop="startLayerRename(layer.id, layer.name)"
+            @keydown.stop
+          >
+            <Pencil :size="14" />
+          </button>
           <span
             class="layer-icon-action"
             role="button"
@@ -1018,12 +1088,20 @@ const canvasPresets = computed(() => [
             <Lock v-if="layer.locked" :size="15" />
             <Unlock v-else :size="15" />
           </span>
-        </button>
-        <button
+        </div>
+        <div
           class="layer-row background-layer-row"
           :class="{ selected: store.backgroundSelected }"
-          type="button"
+          role="button"
+          tabindex="0"
           @click="selectLayer(store.document.canvas.background.id)"
+          @keydown="
+            handleLayerKeydown(
+              $event,
+              store.document.canvas.background.id,
+              store.document.canvas.background.name,
+            )
+          "
         >
           <span
             class="layer-icon-action"
@@ -1035,9 +1113,47 @@ const canvasPresets = computed(() => [
             <EyeOff v-else :size="17" />
           </span>
           <span class="layer-type">B</span>
-          <span class="layer-name">
+          <input
+            v-if="renamingLayerId === store.document.canvas.background.id"
+            v-model="layerNameDraft"
+            class="layer-name-input"
+            :aria-label="t('inspector.layerNameInput')"
+            maxlength="120"
+            @pointerdown.stop
+            @click.stop
+            @dblclick.stop
+            @keydown.enter.prevent.stop="commitLayerRename"
+            @keydown.esc.prevent.stop="cancelLayerRename"
+            @blur="commitLayerRename"
+          />
+          <span
+            v-else
+            class="layer-name"
+            :title="t('inspector.renameLayerHint')"
+            @dblclick.stop="
+              startLayerRename(
+                store.document.canvas.background.id,
+                store.document.canvas.background.name,
+              )
+            "
+          >
             {{ store.document.canvas.background.name }}
           </span>
+          <button
+            class="layer-icon-action"
+            type="button"
+            :title="t('inspector.renameLayer')"
+            :aria-label="t('inspector.renameLayer')"
+            @click.stop="
+              startLayerRename(
+                store.document.canvas.background.id,
+                store.document.canvas.background.name,
+              )
+            "
+            @keydown.stop
+          >
+            <Pencil :size="14" />
+          </button>
           <span
             class="layer-icon-action"
             role="button"
@@ -1047,7 +1163,7 @@ const canvasPresets = computed(() => [
             <Lock v-if="store.document.canvas.background.locked" :size="15" />
             <Unlock v-else :size="15" />
           </span>
-        </button>
+        </div>
         <div v-if="node" class="layer-order-actions">
           <button
             type="button"

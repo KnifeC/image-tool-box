@@ -326,6 +326,18 @@ export const useEditorStore = defineStore("editor", () => {
     });
   }
 
+  function renameLayer(id: string, name: string) {
+    const nextName = name.trim();
+    const layer =
+      id === BACKGROUND_LAYER_ID
+        ? document.canvas.background
+        : document.nodes.find((candidate) => candidate.id === id);
+    if (!layer || !nextName || nextName === layer.name) return;
+    mutate("rename-layer", () => {
+      layer.name = nextName;
+    });
+  }
+
   function updateToolPreset<K extends CreationTool>(
     targetTool: K,
     patch: Partial<ToolPresets[K]>,
@@ -1272,6 +1284,7 @@ export const useEditorStore = defineStore("editor", () => {
     canRedo,
     setTool,
     renameDocument,
+    renameLayer,
     updateToolPreset,
     resetToolPreset,
     select,

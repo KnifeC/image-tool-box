@@ -909,7 +909,7 @@ select:disabled {
 .layer-row {
   display: grid;
   position: relative;
-  grid-template-columns: 18px 28px 26px minmax(0, 1fr) 28px;
+  grid-template-columns: 18px 28px 26px minmax(0, 1fr) 28px 28px;
   align-items: center;
   width: 100%;
   min-height: 42px;
@@ -979,13 +979,18 @@ select:disabled {
   margin-top: 8px;
   border-top: 1px solid var(--border);
   border-radius: 0 0 6px 6px;
-  grid-template-columns: 28px 26px minmax(0, 1fr) 28px;
+  grid-template-columns: 28px 26px minmax(0, 1fr) 28px 28px;
 }
 
 .layer-icon-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
 }
 
 .layer-type {
@@ -1004,6 +1009,20 @@ select:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.layer-name-input {
+  min-width: 0;
+  width: 100%;
+  height: 28px;
+  padding: 0 7px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(49, 87, 245, 0.13);
+  font: inherit;
 }
 
 .layer-order-actions {
