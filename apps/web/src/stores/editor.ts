@@ -110,7 +110,6 @@ export const useEditorStore = defineStore("editor", () => {
       ? document.canvas.background.color
       : "#ffffff",
   );
-  let autosaveTimer: number | undefined;
   let changeRevision = 0;
   let saveLoop: Promise<void> | null = null;
 
@@ -160,15 +159,10 @@ export const useEditorStore = defineStore("editor", () => {
   function markDirty() {
     changeRevision += 1;
     dirty.value = true;
-    window.clearTimeout(autosaveTimer);
-    autosaveTimer = window.setTimeout(() => {
-      void flushAutosave();
-    }, 1_000);
+    void flushAutosave();
   }
 
   async function runSaveLoop(force = false) {
-    window.clearTimeout(autosaveTimer);
-    autosaveTimer = undefined;
     if (force && !dirty.value) {
       changeRevision += 1;
       dirty.value = true;
@@ -219,8 +213,6 @@ export const useEditorStore = defineStore("editor", () => {
     nextDocument: ImageToolBoxDocument,
     nextAssets: Map<string, Blob>,
   ) {
-    window.clearTimeout(autosaveTimer);
-    autosaveTimer = undefined;
     for (const url of assetUrls.values()) URL.revokeObjectURL(url);
     assets.clear();
     assetUrls.clear();

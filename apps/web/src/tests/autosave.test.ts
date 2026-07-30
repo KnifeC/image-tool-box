@@ -34,21 +34,14 @@ class MemoryStorage implements Storage {
 
 const originalWindow = globalThis.window;
 let storage: MemoryStorage;
-let autosaveCallback: (() => void) | undefined;
 
 beforeEach(() => {
   storage = new MemoryStorage();
-  autosaveCallback = undefined;
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
       localStorage: storage,
-      setTimeout: vi.fn((handler: TimerHandler, delay?: number) => {
-        if (typeof handler === "function" && delay === 1_000) {
-          autosaveCallback = () => handler();
-        }
-        return 1;
-      }),
+      setTimeout: vi.fn(() => 1),
       clearTimeout: vi.fn(),
       matchMedia: vi.fn().mockReturnValue({ matches: false }),
     },
@@ -70,8 +63,7 @@ describe("editor local draft lifecycle", () => {
     store.addNode("rectangle");
 
     expect(store.hasPendingAutosave).toBe(true);
-    expect(autosaveCallback).toBeTypeOf("function");
-    autosaveCallback?.();
+    expect(store.saving).toBe(true);
     await store.flushAutosave();
 
     expect(store.hasPendingAutosave).toBe(false);
