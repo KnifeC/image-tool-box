@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import {
   Download,
   FileImage,
+  FilePlus2,
   FolderOpen,
   Languages,
   Pencil,
@@ -14,7 +15,7 @@ import {
 import { platformKey } from "../platform";
 import { useEditorStore } from "../stores/editor";
 
-defineProps<{ onExport: () => void }>();
+defineProps<{ onExport: () => void; onNew: () => void }>();
 
 const store = useEditorStore();
 const platform = inject(platformKey)!;
@@ -120,6 +121,10 @@ function cancelRename() {
       >
         <FileImage :size="20" />
         <span>{{ t("topbar.import") }}</span>
+      </button>
+      <button class="command command-new" type="button" @click="onNew">
+        <FilePlus2 :size="20" />
+        <span>{{ t("topbar.new") }}</span>
       </button>
       <button class="command command-open" type="button" @click="store.openProject(platform)">
         <FolderOpen :size="20" />

@@ -1176,7 +1176,8 @@ select:disabled {
   backdrop-filter: blur(3px);
 }
 
-.export-dialog {
+.export-dialog,
+.confirm-dialog {
   width: min(480px, 100%);
   overflow: hidden;
   background: white;
@@ -1185,7 +1186,8 @@ select:disabled {
   box-shadow: 0 30px 70px rgba(20, 26, 40, 0.22);
 }
 
-.export-dialog > header {
+.export-dialog > header,
+.confirm-dialog > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1193,18 +1195,21 @@ select:disabled {
   border-bottom: 1px solid var(--border);
 }
 
-.export-dialog h2 {
+.export-dialog h2,
+.confirm-dialog h2 {
   margin: 0 0 5px;
   font-size: 19px;
 }
 
-.export-dialog p {
+.export-dialog p,
+.confirm-dialog p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
 }
 
-.export-dialog header button {
+.export-dialog header button,
+.confirm-dialog header button {
   display: inline-flex;
   padding: 7px;
   background: transparent;
@@ -1270,11 +1275,25 @@ select:disabled {
   line-height: 1.5;
 }
 
-.export-dialog > footer {
+.export-dialog > footer,
+.confirm-dialog > footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 17px 26px 22px;
+}
+
+.confirm-dialog {
+  width: min(440px, 100%);
+  outline: none;
+}
+
+.confirm-dialog-body {
+  padding: 22px 26px;
+  color: #6f4a13;
+  background: #fffaf0;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .secondary-button,
@@ -1339,6 +1358,7 @@ select:disabled {
   }
 
   .command-history span,
+  .command-new span,
   .command-open span {
     display: none;
   }
@@ -1629,7 +1649,8 @@ select:disabled {
     align-items: end;
   }
 
-  .export-dialog {
+  .export-dialog,
+  .confirm-dialog {
     width: 100%;
     border-radius: 14px 14px 0 0;
     padding-bottom: env(safe-area-inset-bottom);

@@ -67,6 +67,20 @@ export async function saveLocalProject(
   for (const [assetId, blob] of assets) {
     await tx.objectStore("assets").put(blob, `${document.id}:${assetId}`);
   }
+  const assetPrefix = `${document.id}:`;
+  const activeAssetKeys = new Set(
+    [...assets.keys()].map((assetId) => `${assetPrefix}${assetId}`),
+  );
+  const storedAssetKeys = await tx.objectStore("assets").getAllKeys();
+  for (const key of storedAssetKeys) {
+    if (
+      typeof key === "string" &&
+      key.startsWith(assetPrefix) &&
+      !activeAssetKeys.has(key)
+    ) {
+      await tx.objectStore("assets").delete(key);
+    }
+  }
   await tx.done;
 }
 
@@ -81,6 +95,21 @@ export async function loadLocalProject(id: string) {
     if (blob) assets.set(asset.id, blob);
   }
   return { document: normalizeDocument(record.document), assets };
+}
+
+export async function deleteLocalProject(id: string) {
+  if (!dbPromise) return;
+  const db = await dbPromise;
+  const tx = db.transaction(["projects", "assets"], "readwrite");
+  await tx.objectStore("projects").delete(id);
+  const assetPrefix = `${id}:`;
+  const storedAssetKeys = await tx.objectStore("assets").getAllKeys();
+  for (const key of storedAssetKeys) {
+    if (typeof key === "string" && key.startsWith(assetPrefix)) {
+      await tx.objectStore("assets").delete(key);
+    }
+  }
+  await tx.done;
 }
 
 export async function setSetting(key: string, value: unknown) {

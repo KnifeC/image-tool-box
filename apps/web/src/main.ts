@@ -4,6 +4,7 @@ import VueKonva from "vue-konva";
 import { createI18n } from "vue-i18n";
 import App from "./App.vue";
 import { platformKey, resolvePlatform } from "./platform";
+import { useEditorStore } from "./stores/editor";
 import "./styles.css";
 
 const savedLocale = localStorage.getItem("imagetoolbox.locale");
@@ -46,6 +47,7 @@ const i18n = createI18n({
         undo: "撤销",
         redo: "重做",
         import: "导入",
+        new: "新建",
         open: "打开",
         save: "保存工程",
         switchLanguage: "切换到英文",
@@ -76,6 +78,14 @@ const i18n = createI18n({
         drawShape: "拖动绘制{shape} · 按住 Shift 绘制{lockedShape}",
         square: "正方形",
         circle: "圆形",
+      },
+      newProjectDialog: {
+        title: "新建工程？",
+        description: "当前画布将被清空，并替换本地自动恢复的工程。",
+        warning: "如果需要保留当前内容，请先将工程保存为 .ibox 文件。",
+        close: "关闭",
+        cancel: "取消",
+        confirm: "新建工程",
       },
       exportDialog: {
         title: "导出图片",
@@ -218,6 +228,7 @@ const i18n = createI18n({
         undo: "Undo",
         redo: "Redo",
         import: "Import",
+        new: "New",
         open: "Open",
         save: "Save Project",
         switchLanguage: "切换到中文",
@@ -248,6 +259,16 @@ const i18n = createI18n({
         drawShape: "Drag to draw a {shape} · Hold Shift for a {lockedShape}",
         square: "square",
         circle: "circle",
+      },
+      newProjectDialog: {
+        title: "Create a new project?",
+        description:
+          "The current canvas will be cleared and replaced as the locally restored project.",
+        warning:
+          "Save the current project as an .ibox file first if you want to keep it.",
+        close: "Close",
+        cancel: "Cancel",
+        confirm: "New Project",
       },
       exportDialog: {
         title: "Export Image",
@@ -361,9 +382,11 @@ const i18n = createI18n({
   },
 });
 
+const pinia = createPinia();
 const app = createApp(App);
-app.use(createPinia());
+app.use(pinia);
 app.use(i18n);
 app.use(VueKonva);
 app.provide(platformKey, resolvePlatform());
+await useEditorStore(pinia).restoreLocalDraft();
 app.mount("#app");

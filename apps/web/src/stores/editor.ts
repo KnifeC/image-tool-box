@@ -23,8 +23,10 @@ import {
   type TextNode,
 } from "@imagetoolbox/editor-core";
 import {
+  deleteLocalProject,
   exportProjectArchive,
   importProjectArchive,
+  loadLocalProject,
   saveLocalProject,
 } from "@imagetoolbox/project-format";
 import type { ImageToolBoxPlatform, OpenedFile } from "@imagetoolbox/platform-api";
@@ -72,7 +74,7 @@ const defaultFill = () => ({
 
 export const useEditorStore = defineStore("editor", () => {
   const document = reactive<ImageToolBoxDocument>(createDocument());
-  const history = new HistoryStack(50);
+  let history = new HistoryStack(50);
   const assets = shallowReactive(new Map<string, Blob>());
   const assetUrls = shallowReactive(new Map<string, string>());
   const selectedIds = ref<string[]>([]);
@@ -95,6 +97,7 @@ export const useEditorStore = defineStore("editor", () => {
   const temporaryPan = ref(false);
   const dirty = ref(false);
   const saving = ref(false);
+  const autosaveFailed = ref(false);
   const toast = ref("");
   const testProjectLoading = ref(false);
   const fitRequest = ref(0);
@@ -108,6 +111,8 @@ export const useEditorStore = defineStore("editor", () => {
       : "#ffffff",
   );
   let autosaveTimer: number | undefined;
+  let changeRevision = 0;
+  let saveLoop: Promise<void> | null = null;
 
   const nodes = computed(() => [...document.nodes].sort((a, b) => a.zIndex - b.zIndex));
   const selectedNodes = computed(() =>
@@ -131,6 +136,15 @@ export const useEditorStore = defineStore("editor", () => {
     historyVersion.value;
     return history.canRedo;
   });
+  const hasPendingAutosave = computed(
+    () => dirty.value || saving.value || autosaveFailed.value,
+  );
+  const hasProjectContent = computed(
+    () =>
+      document.nodes.length > 0 ||
+      document.assets.length > 0 ||
+      document.updatedAt !== document.createdAt,
+  );
 
   function mutate(type: string, operation: () => void) {
     commitPreviewEdit();
@@ -144,19 +158,153 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function markDirty() {
+    changeRevision += 1;
     dirty.value = true;
     window.clearTimeout(autosaveTimer);
-    autosaveTimer = window.setTimeout(() => void saveLocal(), 1_000);
+    autosaveTimer = window.setTimeout(() => {
+      void flushAutosave();
+    }, 1_000);
+  }
+
+  async function runSaveLoop(force = false) {
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = undefined;
+    if (force && !dirty.value) {
+      changeRevision += 1;
+      dirty.value = true;
+    }
+    if (!dirty.value && !saveLoop) return;
+    if (saveLoop) return saveLoop;
+
+    saveLoop = (async () => {
+      saving.value = true;
+      try {
+        while (dirty.value) {
+          const revision = changeRevision;
+          const documentSnapshot = serializableDocument();
+          const assetSnapshot = new Map(assets);
+          await saveLocalProject(documentSnapshot, assetSnapshot);
+          window.localStorage.setItem(CURRENT_PROJECT_KEY, documentSnapshot.id);
+          autosaveFailed.value = false;
+          dirty.value = changeRevision !== revision;
+        }
+      } catch (error) {
+        autosaveFailed.value = true;
+        dirty.value = true;
+        console.error("Unable to save the local project", error);
+        showToast("自动保存失败 / Autosave failed");
+        throw error;
+      } finally {
+        saving.value = false;
+        saveLoop = null;
+      }
+    })();
+
+    return saveLoop;
   }
 
   async function saveLocal() {
-    saving.value = true;
+    return runSaveLoop(true);
+  }
+
+  async function flushAutosave() {
     try {
-      await saveLocalProject(serializableDocument(), assets);
-      window.localStorage.setItem(CURRENT_PROJECT_KEY, document.id);
-      dirty.value = false;
-    } finally {
-      saving.value = false;
+      await runSaveLoop();
+    } catch {
+      // The store exposes the failed state and warns before leaving.
+    }
+  }
+
+  function replaceActiveProject(
+    nextDocument: ImageToolBoxDocument,
+    nextAssets: Map<string, Blob>,
+  ) {
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = undefined;
+    for (const url of assetUrls.values()) URL.revokeObjectURL(url);
+    assets.clear();
+    assetUrls.clear();
+
+    Object.assign(document, cloneDocument(nextDocument));
+    for (const [id, asset] of nextAssets) {
+      assets.set(id, asset);
+      refreshAssetUrl(id, asset);
+    }
+
+    history = new HistoryStack(50);
+    historyVersion.value += 1;
+    selectedIds.value = [];
+    tool.value = "select";
+    inspectorTab.value = "properties";
+    mobilePanel.value = null;
+    zoom.value = 0.55;
+    viewOffset.x = 0;
+    viewOffset.y = 0;
+    cropRatio.value = undefined;
+    cropOriginal.value = null;
+    cropSelection.value = null;
+    temporaryPan.value = false;
+    previewBefore = null;
+    textEditRequest.value = null;
+    lastCanvasColor.value =
+      document.canvas.background.type === "color"
+        ? document.canvas.background.color
+        : "#ffffff";
+    changeRevision = 0;
+    dirty.value = false;
+    autosaveFailed.value = false;
+    fitCanvas();
+  }
+
+  async function restoreLocalDraft() {
+    let projectId: string | null = null;
+    try {
+      projectId = window.localStorage.getItem(CURRENT_PROJECT_KEY);
+    } catch (error) {
+      console.warn("Unable to read the local project pointer", error);
+    }
+    if (!projectId) return false;
+
+    try {
+      const restored = await loadLocalProject(projectId);
+      if (!restored) {
+        window.localStorage.removeItem(CURRENT_PROJECT_KEY);
+        return false;
+      }
+      replaceActiveProject(restored.document, restored.assets);
+      showToast("已恢复上次工程 / Last project restored");
+      return true;
+    } catch (error) {
+      console.error("Unable to restore the local project", error);
+      try {
+        window.localStorage.removeItem(CURRENT_PROJECT_KEY);
+      } catch {
+        // The default blank project remains usable without localStorage.
+      }
+      showToast("上次工程恢复失败 / Could not restore last project");
+      return false;
+    }
+  }
+
+  async function removePreviousLocalProject(previousProjectId: string) {
+    if (previousProjectId === document.id) return;
+    try {
+      await deleteLocalProject(previousProjectId);
+    } catch (error) {
+      console.warn("Unable to remove the previous local project", error);
+    }
+  }
+
+  async function createNewProject() {
+    const previousProjectId = document.id;
+    await flushAutosave();
+    replaceActiveProject(createDocument(), new Map());
+    try {
+      await saveLocal();
+      await removePreviousLocalProject(previousProjectId);
+      showToast("已新建工程 / New project created");
+    } catch {
+      // saveLocal reports the error and keeps unload protection enabled.
     }
   }
 
@@ -830,7 +978,7 @@ export const useEditorStore = defineStore("editor", () => {
     commitPreviewEdit();
     if (history.undo(document)) {
       historyVersion.value += 1;
-      dirty.value = true;
+      markDirty();
       selectedIds.value = selectedIds.value.filter((id) =>
         id === BACKGROUND_LAYER_ID ||
         document.nodes.some((node) => node.id === id),
@@ -842,7 +990,7 @@ export const useEditorStore = defineStore("editor", () => {
     commitPreviewEdit();
     if (history.redo(document)) {
       historyVersion.value += 1;
-      dirty.value = true;
+      markDirty();
     }
   }
 
@@ -965,7 +1113,11 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   async function saveProject(platform: ImageToolBoxPlatform) {
-    await saveLocal();
+    try {
+      await saveLocal();
+    } catch {
+      // A downloadable project file is still a valid recovery path.
+    }
     const serializable = serializableDocument();
     const blob = await exportProjectArchive(serializable, assets);
     const result = await platform.saveFile({
@@ -987,24 +1139,16 @@ export const useEditorStore = defineStore("editor", () => {
 
   async function openProjectBlob(blob: Blob) {
     const imported = await importProjectArchive(blob);
-    Object.assign(document, imported.document);
-    if (document.canvas.background.type === "color") {
-      lastCanvasColor.value = document.canvas.background.color;
+    const previousProjectId = document.id;
+    await flushAutosave();
+    replaceActiveProject(imported.document, imported.assets);
+    try {
+      await saveLocal();
+      await removePreviousLocalProject(previousProjectId);
+      showToast("工程已打开 / Project opened");
+    } catch {
+      // saveLocal reports the error and keeps unload protection enabled.
     }
-    selectedIds.value = [];
-    for (const [id, asset] of assets) {
-      const url = assetUrls.get(id);
-      if (url) URL.revokeObjectURL(url);
-    }
-    assets.clear();
-    assetUrls.clear();
-    for (const [id, asset] of imported.assets) {
-      assets.set(id, asset);
-      refreshAssetUrl(id, asset);
-    }
-    await saveLocal();
-    fitCanvas();
-    showToast("工程已打开 / Project opened");
   }
 
   async function exportImage(
@@ -1086,7 +1230,6 @@ export const useEditorStore = defineStore("editor", () => {
         );
       }
       select(lakeId);
-      dirty.value = false;
     } catch (error) {
       console.error(error);
       showToast("测试工程打开失败 / Failed to open test project");
@@ -1127,6 +1270,9 @@ export const useEditorStore = defineStore("editor", () => {
     temporaryPan,
     dirty,
     saving,
+    autosaveFailed,
+    hasPendingAutosave,
+    hasProjectContent,
     toast,
     testProjectLoading,
     fitRequest,
@@ -1174,6 +1320,9 @@ export const useEditorStore = defineStore("editor", () => {
     resetCrop,
     saveProject,
     openProject,
+    createNewProject,
+    restoreLocalDraft,
+    flushAutosave,
     openTestProject,
     exportImage,
     saveLocal,

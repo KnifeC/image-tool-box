@@ -13,6 +13,7 @@ import BottomBar from "./BottomBar.vue";
 import CanvasStage from "./CanvasStage.vue";
 import ExportDialog from "./ExportDialog.vue";
 import InspectorPanel from "./InspectorPanel.vue";
+import NewProjectDialog from "./NewProjectDialog.vue";
 import ToolRail from "./ToolRail.vue";
 import TopBar from "./TopBar.vue";
 
@@ -20,6 +21,7 @@ const store = useEditorStore();
 const platform = inject(platformKey)!;
 const { locale, t } = useI18n();
 const exportOpen = ref(false);
+const newProjectOpen = ref(false);
 let removeMenuListener: (() => void) | undefined;
 
 async function importImages() {
@@ -81,6 +83,34 @@ function releaseTemporaryPan() {
   store.setTemporaryPan(false);
 }
 
+function requestNewProject() {
+  if (store.hasProjectContent) {
+    newProjectOpen.value = true;
+    return;
+  }
+  void store.createNewProject();
+}
+
+async function confirmNewProject() {
+  newProjectOpen.value = false;
+  await store.createNewProject();
+}
+
+function flushOnPageHide() {
+  void store.flushAutosave();
+}
+
+function flushWhenHidden() {
+  if (document.visibilityState === "hidden") flushOnPageHide();
+}
+
+function protectBeforeUnload(event: BeforeUnloadEvent) {
+  if (!store.hasPendingAutosave) return;
+  void store.flushAutosave();
+  event.preventDefault();
+  event.returnValue = "";
+}
+
 function handleMenuCommand(command: MenuCommand) {
   if (command === "import") void importImages();
   if (command === "open-project") void store.openProject(platform);
@@ -123,6 +153,9 @@ onMounted(() => {
   window.addEventListener("keyup", keyboardUp);
   window.addEventListener("paste", onPaste);
   window.addEventListener("blur", releaseTemporaryPan);
+  window.addEventListener("pagehide", flushOnPageHide);
+  window.addEventListener("beforeunload", protectBeforeUnload);
+  document.addEventListener("visibilitychange", flushWhenHidden);
   removeMenuListener = platform.onMenuCommand(handleMenuCommand);
 });
 
@@ -141,13 +174,20 @@ onBeforeUnmount(() => {
   window.removeEventListener("keyup", keyboardUp);
   window.removeEventListener("paste", onPaste);
   window.removeEventListener("blur", releaseTemporaryPan);
+  window.removeEventListener("pagehide", flushOnPageHide);
+  window.removeEventListener("beforeunload", protectBeforeUnload);
+  document.removeEventListener("visibilitychange", flushWhenHidden);
+  void store.flushAutosave();
   removeMenuListener?.();
 });
 </script>
 
 <template>
   <div class="app-shell" @dragover.prevent @drop="onDrop">
-    <TopBar :on-export="() => (exportOpen = true)" />
+    <TopBar
+      :on-export="() => (exportOpen = true)"
+      :on-new="requestNewProject"
+    />
     <div class="editor-grid" :class="{ 'crop-active': store.tool === 'crop' }">
       <ToolRail @import="importImages" />
       <CanvasStage />
@@ -168,6 +208,13 @@ onBeforeUnmount(() => {
 
     <Transition name="fade">
       <ExportDialog v-if="exportOpen" @close="exportOpen = false" />
+    </Transition>
+    <Transition name="fade">
+      <NewProjectDialog
+        v-if="newProjectOpen"
+        @close="newProjectOpen = false"
+        @confirm="confirmNewProject"
+      />
     </Transition>
     <Transition name="toast">
       <div v-if="store.toast" class="toast-message">{{ store.toast }}</div>
