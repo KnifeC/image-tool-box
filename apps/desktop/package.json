@@ -14,7 +14,7 @@
     "dev": "pnpm build && wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "tsup src/main.ts src/preload.ts --format cjs --out-dir dist --clean --sourcemap --external electron",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "dist:win": "pnpm build && electron-builder --win portable zip --x64",
+    "dist:win": "pnpm build && electron-builder --win portable --x64",
     "dist:mac": "pnpm build && electron-builder --mac dmg zip --x64 --arm64",
     "dist:linux": "pnpm build && electron-builder --linux AppImage deb rpm --x64"
   },
@@ -60,10 +60,6 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
-        },
-        {
-          "target": "zip",
           "arch": ["x64"]
         }
       ]

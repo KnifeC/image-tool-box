@@ -33,7 +33,7 @@ pnpm dev:desktop
 pnpm typecheck       # 类型检查
 pnpm test            # 运行测试
 pnpm build:web       # 构建 Web/PWA
-pnpm dist:win        # Windows x64 便携版 EXE 和免安装 ZIP
+pnpm dist:win        # Windows x64 免安装便携版 EXE
 pnpm dist:mac        # macOS DMG/ZIP（x64、arm64）
 pnpm dist:linux      # Linux AppImage/DEB/RPM
 ```

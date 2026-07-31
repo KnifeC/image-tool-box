@@ -22,27 +22,17 @@ jobs:
       matrix:
         include:
           - name: Windows x64
+            platform: windows
             os: windows-latest
             command: pnpm dist:win
-            artifact_name: electron-windows-x64
-            artifact_path: |
-              out/*.exe
-              out/*.zip
           - name: macOS x64 and arm64
+            platform: macos
             os: macos-latest
             command: pnpm dist:mac
-            artifact_name: electron-macos
-            artifact_path: |
-              out/*.dmg
-              out/*.zip
           - name: Linux x64
+            platform: linux
             os: ubuntu-latest
             command: pnpm dist:linux
-            artifact_name: electron-linux-x64
-            artifact_path: |
-              out/*.AppImage
-              out/*.deb
-              out/*.rpm
 
     env:
       # 构建未签名的 macOS 包；配置证书后可移除此项并接入签名/公证。
@@ -67,13 +57,77 @@ jobs:
       - name: Build packages
         run: ${{ matrix.command }}
 
-      - name: Upload packages
-        uses: actions/upload-artifact@v6
+      - name: Upload Windows portable EXE
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          path: out/*-win-x64-portable.exe
           if-no-files-found: error
           retention-days: 14
+          archive: false
+
+      - name: Upload macOS x64 DMG
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*-mac-x64.dmg
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload macOS arm64 DMG
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*-mac-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload macOS x64 ZIP
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*-mac-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload macOS arm64 ZIP
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*-mac-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload Linux AppImage
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload Linux DEB
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*.deb
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
+
+      - name: Upload Linux RPM
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          path: out/*.rpm
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
 
   release:
     name: Publish GitHub Release
@@ -85,7 +139,7 @@ jobs:
 
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true
