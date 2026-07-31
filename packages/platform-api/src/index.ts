@@ -1,4 +1,4 @@
-export const PLATFORM_API_VERSION = 2 as const;
+export const PLATFORM_API_VERSION = 3 as const;
 
 export type PlatformCapabilities = {
   nativeFileDialogs: boolean;
@@ -34,6 +34,11 @@ export type SaveFileResult = {
   path?: string;
 };
 
+export type ClipboardImageRequest = {
+  mimeType: "image/png";
+  bytes: ArrayBuffer;
+};
+
 export type MenuCommand =
   | "import"
   | "open-project"
@@ -51,6 +56,7 @@ export interface ImageToolBoxPlatform {
   readonly capabilities: PlatformCapabilities;
   openFiles(options: OpenFileOptions): Promise<OpenedFile[]>;
   saveFile(request: SaveFileRequest): Promise<SaveFileResult>;
+  writeImageToClipboard(request: ClipboardImageRequest): Promise<void>;
   setLocale(locale: AppLocale): Promise<void>;
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
 }

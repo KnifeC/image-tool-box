@@ -199,6 +199,32 @@ textarea:focus-visible {
   font-weight: 650;
 }
 
+.quick-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  margin-left: 10px;
+  padding: 0;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid #d9dfff;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.quick-copy-button:hover:not(:disabled) {
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.quick-copy-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .export-button,
 .primary-button {
   display: inline-flex;
@@ -1310,6 +1336,25 @@ select:disabled {
   cursor: pointer;
 }
 
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--accent);
+  border-color: #b9c5ff;
+}
+
+.copy-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.secondary-button:disabled,
+.primary-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .toast-message {
   position: fixed;
   z-index: 120;
@@ -1434,6 +1479,12 @@ select:disabled {
     min-height: 42px;
     margin-left: 2px;
     padding: 0;
+  }
+
+  .quick-copy-button {
+    width: 42px;
+    min-height: 42px;
+    margin-left: 2px;
   }
 
   .export-button span {
@@ -1637,6 +1688,10 @@ select:disabled {
   }
 
   .export-button {
+    width: 40px;
+  }
+
+  .quick-copy-button {
     width: 40px;
   }
 

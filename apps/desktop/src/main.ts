@@ -1,10 +1,12 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
   net,
+  nativeImage,
   protocol,
   session,
 } from "electron";
@@ -44,6 +46,11 @@ const saveSchema = z.object({
       }),
     )
     .optional(),
+});
+
+const clipboardImageSchema = z.object({
+  mimeType: z.literal("image/png"),
+  bytes: z.instanceof(ArrayBuffer),
 });
 
 let mainWindow: BrowserWindow | null = null;
@@ -198,6 +205,14 @@ function installIpc() {
     if (result.canceled || !result.filePath) return { saved: false };
     await writeFile(result.filePath, Buffer.from(request.bytes));
     return { saved: true, path: result.filePath };
+  });
+
+  ipcMain.handle("clipboard:write-image", (event, rawRequest) => {
+    validateSender(event);
+    const request = clipboardImageSchema.parse(rawRequest);
+    const image = nativeImage.createFromBuffer(Buffer.from(request.bytes));
+    if (image.isEmpty()) throw new Error("Invalid clipboard image");
+    clipboard.writeImage(image);
   });
 }
 

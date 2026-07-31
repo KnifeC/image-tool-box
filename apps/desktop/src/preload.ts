@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  ClipboardImageRequest,
   ImageToolBoxPlatform,
   MenuCommand,
   SaveFileRequest,
@@ -23,6 +24,9 @@ const electronPlatform: ImageToolBoxPlatform = {
   },
   saveFile(request: SaveFileRequest) {
     return ipcRenderer.invoke("files:save", request);
+  },
+  writeImageToClipboard(request: ClipboardImageRequest) {
+    return ipcRenderer.invoke("clipboard:write-image", request);
   },
   setLocale(locale) {
     return ipcRenderer.invoke("locale:set", locale);

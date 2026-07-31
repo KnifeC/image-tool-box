@@ -25,6 +25,7 @@ describe("platform resolution", () => {
 
     expect(platform.apiVersion).toBe(PLATFORM_API_VERSION);
     expect(platform.capabilities.nativeFileDialogs).toBe(false);
+    expect(platform.writeImageToClipboard).toBeTypeOf("function");
     expect(platform.onMenuCommand(vi.fn())).toBeTypeOf("function");
   });
 
@@ -43,6 +44,7 @@ describe("platform resolution", () => {
       },
       openFiles: vi.fn().mockResolvedValue([]),
       saveFile: vi.fn().mockResolvedValue({ saved: true }),
+      writeImageToClipboard: vi.fn().mockResolvedValue(undefined),
       setLocale: vi.fn().mockResolvedValue(undefined),
       onMenuCommand: vi.fn().mockReturnValue(() => {}),
     };

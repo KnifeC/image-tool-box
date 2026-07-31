@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
-import { Download, X } from "lucide-vue-next";
+import { computed, inject, onBeforeUnmount, ref } from "vue";
+import { Check, ClipboardCopy, Download, X } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { platformKey } from "../platform";
 import { useEditorStore } from "../stores/editor";
@@ -14,6 +14,10 @@ const quality = ref(0.9);
 const scale = ref(1);
 const selectionOnly = ref(false);
 const exporting = ref(false);
+const copying = ref(false);
+const copied = ref(false);
+const copyError = ref("");
+let copiedTimer: number | undefined;
 const hasSelection = computed(() => store.selectedNodes.length > 0);
 const exportBounds = computed(() => store.documentBounds);
 
@@ -31,6 +35,29 @@ async function submit() {
     exporting.value = false;
   }
 }
+
+async function copyToClipboard() {
+  copying.value = true;
+  copied.value = false;
+  copyError.value = "";
+  window.clearTimeout(copiedTimer);
+  try {
+    await store.copyImageToClipboard(platform, {
+      scale: scale.value,
+      selectionOnly: selectionOnly.value,
+    });
+    copied.value = true;
+    copiedTimer = window.setTimeout(() => {
+      copied.value = false;
+    }, 1_800);
+  } catch {
+    copyError.value = t("exportDialog.copyFailed");
+  } finally {
+    copying.value = false;
+  }
+}
+
+onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 </script>
 
 <template>
@@ -88,15 +115,35 @@ async function submit() {
         >
           {{ t("exportDialog.jpgWarning") }}
         </p>
+        <p v-if="copyError" class="export-warning" role="alert">
+          {{ copyError }}
+        </p>
       </div>
       <footer>
         <button class="secondary-button" type="button" @click="emit('close')">
           {{ t("exportDialog.cancel") }}
         </button>
         <button
+          class="secondary-button copy-button"
+          type="button"
+          :title="t('exportDialog.copyHint')"
+          :disabled="copying || exporting || copied || !exportBounds"
+          @click="copyToClipboard"
+        >
+          <Check v-if="copied" :size="18" />
+          <ClipboardCopy v-else :size="18" />
+          {{
+            copying
+              ? t("exportDialog.copying")
+              : copied
+                ? t("exportDialog.copied")
+                : t("exportDialog.copy")
+          }}
+        </button>
+        <button
           class="primary-button"
           type="button"
-          :disabled="exporting || !exportBounds"
+          :disabled="exporting || copying || !exportBounds"
           @click="submit"
         >
           <Download :size="18" />

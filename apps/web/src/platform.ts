@@ -1,6 +1,7 @@
 import type { InjectionKey } from "vue";
 import {
   PLATFORM_API_VERSION,
+  type ClipboardImageRequest,
   type ImageToolBoxPlatform,
   type OpenedFile,
   type SaveFileRequest,
@@ -51,6 +52,15 @@ const webPlatform: ImageToolBoxPlatform = {
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     return { saved: true };
+  },
+  async writeImageToClipboard(request: ClipboardImageRequest) {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      throw new Error("Image clipboard is not supported");
+    }
+    const blob = new Blob([request.bytes], { type: request.mimeType });
+    await navigator.clipboard.write([
+      new ClipboardItem({ [request.mimeType]: blob }),
+    ]);
   },
   async setLocale() {},
   onMenuCommand() {

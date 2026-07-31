@@ -1179,6 +1179,26 @@ export const useEditorStore = defineStore("editor", () => {
     showToast("图片已导出 / Image exported");
   }
 
+  async function copyImageToClipboard(
+    platform: ImageToolBoxPlatform,
+    options: {
+      scale: number;
+      selectionOnly: boolean;
+    },
+  ) {
+    const blob = await renderDocument(document, assets, {
+      format: "image/png",
+      quality: 1,
+      ...options,
+      selectedIds: selectedIds.value,
+    });
+    await platform.writeImageToClipboard({
+      mimeType: "image/png",
+      bytes: await blob.arrayBuffer(),
+    });
+    showToast("图片已复制到剪贴板 / Image copied to clipboard");
+  }
+
   function serializableDocument() {
     const result = plainClone(document);
     const bounds = getEffectiveBackgroundBounds(result);
@@ -1330,6 +1350,7 @@ export const useEditorStore = defineStore("editor", () => {
     flushAutosave,
     openTestProject,
     exportImage,
+    copyImageToClipboard,
     saveLocal,
   };
 });

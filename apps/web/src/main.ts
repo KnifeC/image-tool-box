@@ -52,6 +52,8 @@ const i18n = createI18n({
         save: "保存工程",
         switchLanguage: "切换到英文",
         export: "导出",
+        copyPng: "复制画布为 PNG",
+        copiedPng: "PNG 已复制到剪贴板",
       },
       mobile: {
         properties: "属性",
@@ -101,6 +103,11 @@ const i18n = createI18n({
         cancel: "取消",
         exporting: "正在导出…",
         export: "导出",
+        copy: "复制到剪贴板",
+        copyHint: "以 PNG 格式复制到剪贴板",
+        copying: "正在复制…",
+        copied: "已复制",
+        copyFailed: "复制失败，请检查系统剪贴板权限。",
       },
       inspector: {
         label: "属性和图层",
@@ -237,6 +244,8 @@ const i18n = createI18n({
         save: "Save Project",
         switchLanguage: "切换到中文",
         export: "Export",
+        copyPng: "Copy canvas as PNG",
+        copiedPng: "PNG copied to clipboard",
       },
       mobile: {
         properties: "Properties",
@@ -288,6 +297,11 @@ const i18n = createI18n({
         cancel: "Cancel",
         exporting: "Exporting…",
         export: "Export",
+        copy: "Copy to Clipboard",
+        copyHint: "Copy to the clipboard as PNG",
+        copying: "Copying…",
+        copied: "Copied",
+        copyFailed: "Copy failed. Check the system clipboard permission.",
       },
       inspector: {
         label: "Properties and layers",

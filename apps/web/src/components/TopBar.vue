@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { inject, nextTick, ref } from "vue";
+import { inject, nextTick, onBeforeUnmount, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
+  Check,
+  ClipboardCopy,
   Download,
   FileImage,
   FilePlus2,
@@ -23,6 +25,9 @@ const { locale, t } = useI18n();
 const renaming = ref(false);
 const nameDraft = ref("");
 const nameInput = ref<HTMLInputElement | null>(null);
+const copying = ref(false);
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 const brandIconUrl = `${import.meta.env.BASE_URL}icon.svg`;
 
 async function importImages() {
@@ -54,6 +59,30 @@ function commitRename() {
 function cancelRename() {
   renaming.value = false;
 }
+
+async function quickCopyPng() {
+  copying.value = true;
+  try {
+    await store.copyImageToClipboard(platform, {
+      scale: 1,
+      selectionOnly: false,
+    });
+    copied.value = true;
+    copiedTimer = setTimeout(() => {
+      copied.value = false;
+      copiedTimer = undefined;
+    }, 1800);
+  } catch (error) {
+    console.error(error);
+    store.showToast(t("exportDialog.copyFailed"));
+  } finally {
+    copying.value = false;
+  }
+}
+
+onBeforeUnmount(() => {
+  if (copiedTimer) clearTimeout(copiedTimer);
+});
 </script>
 
 <template>
@@ -148,6 +177,18 @@ function cancelRename() {
     >
       <Languages :size="19" />
       <span>{{ locale === "zh" ? "中" : "EN" }}</span>
+    </button>
+
+    <button
+      class="quick-copy-button"
+      type="button"
+      :title="copied ? t('topbar.copiedPng') : t('topbar.copyPng')"
+      :aria-label="copied ? t('topbar.copiedPng') : t('topbar.copyPng')"
+      :disabled="copying || copied || !store.documentBounds"
+      @click="quickCopyPng"
+    >
+      <Check v-if="copied" :size="20" />
+      <ClipboardCopy v-else :size="20" />
     </button>
 
     <button
