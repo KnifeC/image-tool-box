@@ -115,6 +115,10 @@ function numberValue(event: Event) {
   return Number((event.target as HTMLInputElement).value);
 }
 
+function textValue(event: Event) {
+  return (event.target as HTMLInputElement | HTMLSelectElement).value;
+}
+
 function update(patch: Partial<SceneNode>) {
   if (node.value) store.updateNode(node.value.id, patch);
 }
@@ -387,6 +391,21 @@ function previewLinear(key: "color" | "width", value: string | number) {
   } as Partial<LineNode | ArrowNode>);
 }
 
+function updateLinearStyle(style: "solid" | "dashed") {
+  if (node.value?.type !== "line" && node.value?.type !== "arrow") return;
+  update({
+    stroke: { ...node.value.stroke, style },
+  } as Partial<LineNode | ArrowNode>);
+}
+
+function previewArrowSize(size: number) {
+  if (node.value?.type !== "arrow") return;
+  preview({
+    pointerLength: size,
+    pointerWidth: Math.max(4, Math.round(size * 0.875)),
+  } as Partial<ArrowNode>);
+}
+
 function previewFreehand(key: "color" | "strokeWidth", value: string | number) {
   if (node.value?.type !== "freehand") return;
   preview({ [key]: value } as Partial<FreehandNode>);
@@ -634,6 +653,23 @@ const canvasPresets = computed(() => [
               />
               <span>px</span>
             </div>
+            <label v-if="node.border.enabled" class="single-field">
+              <span>{{ t("options.style") }}</span>
+              <select
+                :value="node.border.style"
+                @change="
+                  update({
+                    border: {
+                      ...node.border,
+                      style: textValue($event) as 'solid' | 'dashed',
+                    },
+                  } as Partial<ImageNode>)
+                "
+              >
+                <option value="solid">{{ t("options.solid") }}</option>
+                <option value="dashed">{{ t("options.dashed") }}</option>
+              </select>
+            </label>
             <label class="single-field">
               <span>{{ t("inspector.cornerRadius") }}</span>
               <input
@@ -650,7 +686,7 @@ const canvasPresets = computed(() => [
             class="property-section"
           >
             <div class="toggle-row">
-              <h3>{{ t("inspector.stroke") }}</h3>
+              <h3>{{ t("inspector.border") }}</h3>
               <input
                 :checked="node.style.stroke.enabled"
                 type="checkbox"
@@ -676,6 +712,39 @@ const canvasPresets = computed(() => [
               />
               <span>px</span>
             </div>
+            <label class="single-field">
+              <span>{{ t("options.style") }}</span>
+              <select
+                :value="node.style.stroke.style"
+                :disabled="!node.style.stroke.enabled"
+                @change="
+                  updateShape(
+                    'stroke',
+                    'style',
+                    textValue($event) as 'solid' | 'dashed',
+                  )
+                "
+              >
+                <option value="solid">{{ t("options.solid") }}</option>
+                <option value="dashed">{{ t("options.dashed") }}</option>
+              </select>
+            </label>
+            <label v-if="node.type === 'rectangle'" class="single-field">
+              <span>{{ t("inspector.cornerRadius") }}</span>
+              <input
+                :value="node.cornerRadius"
+                type="number"
+                min="0"
+                max="1000"
+                @input="
+                  preview({
+                    cornerRadius: numberValue($event),
+                  } as Partial<RectangleNode>)
+                "
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+            </label>
             <div class="toggle-row property-subrow">
               <h3>{{ t("inspector.fill") }}</h3>
               <input
@@ -739,6 +808,38 @@ const canvasPresets = computed(() => [
                 @blur="finishPreview"
               />
             </div>
+            <label class="single-field">
+              <span>{{ t("options.style") }}</span>
+              <select
+                :value="node.stroke.style"
+                @change="
+                  updateLinearStyle(
+                    textValue($event) as 'solid' | 'dashed',
+                  )
+                "
+              >
+                <option value="solid">{{ t("options.solid") }}</option>
+                <option value="dashed">{{ t("options.dashed") }}</option>
+              </select>
+            </label>
+            <template v-if="node.type === 'arrow'">
+              <div class="slider-heading property-subrow">
+                <h3>{{ t("options.arrowhead") }}</h3>
+                <output>{{ Math.round(node.pointerLength) }} px</output>
+              </div>
+              <input
+                class="full-slider"
+                :value="node.pointerLength"
+                type="range"
+                min="4"
+                max="60"
+                step="1"
+                :aria-label="t('options.arrowhead')"
+                @input="previewArrowSize(numberValue($event))"
+                @change="finishPreview"
+                @blur="finishPreview"
+              />
+            </template>
           </section>
 
           <section v-if="node.type === 'freehand'" class="property-section">
@@ -798,6 +899,37 @@ const canvasPresets = computed(() => [
                   @change="finishPreview"
                   @blur="finishPreview"
                 />
+              </label>
+            </div>
+            <div class="field-grid">
+              <label>
+                <span>{{ t("options.weight") }}</span>
+                <select
+                  :value="node.fontWeight"
+                  @change="updateText('fontWeight', numberValue($event))"
+                >
+                  <option :value="400">{{ t("options.regular") }}</option>
+                  <option :value="500">{{ t("options.medium") }}</option>
+                  <option :value="600">{{ t("options.semibold") }}</option>
+                  <option :value="700">{{ t("options.bold") }}</option>
+                  <option :value="800">{{ t("options.extrabold") }}</option>
+                </select>
+              </label>
+              <label>
+                <span>{{ t("options.align") }}</span>
+                <select
+                  :value="node.align"
+                  @change="
+                    updateText(
+                      'align',
+                      textValue($event) as TextNode['align'],
+                    )
+                  "
+                >
+                  <option value="left">{{ t("options.alignLeft") }}</option>
+                  <option value="center">{{ t("options.alignCenter") }}</option>
+                  <option value="right">{{ t("options.alignRight") }}</option>
+                </select>
               </label>
             </div>
           </section>

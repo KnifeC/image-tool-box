@@ -172,11 +172,11 @@ function reset() {
     <template v-else-if="tool === 'rectangle' || tool === 'ellipse'">
       <section class="property-section">
         <div class="toggle-row">
-          <h3>{{ t("options.stroke") }}</h3>
+          <h3>{{ t("inspector.border") }}</h3>
           <input
             :checked="store.toolPresets[tool].style.stroke.enabled"
             type="checkbox"
-            :aria-label="t('options.stroke')"
+            :aria-label="t('inspector.border')"
             @change="updateShape('stroke', 'enabled', checkedValue($event))"
           />
         </div>
