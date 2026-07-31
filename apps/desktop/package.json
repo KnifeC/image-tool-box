@@ -2,6 +2,7 @@
   "name": "@imagetoolbox/desktop",
   "version": "0.1.0",
   "private": true,
+  "desktopName": "com.imagetoolbox.app.desktop",
   "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
@@ -28,6 +29,7 @@
   "build": {
     "appId": "com.imagetoolbox.app",
     "productName": "ImageToolBox",
+    "executableName": "ImageToolBox",
     "asar": true,
     "files": [
       "dist/**/*",
@@ -44,7 +46,7 @@
       "buildResources": "build"
     },
     "icon": "build/icon.png",
-    "artifactName": "ImageToolBox-${version}-${os}-${arch}-${name}.${ext}",
+    "artifactName": "ImageToolBox-${version}-${os}-${arch}.${ext}",
     "win": {
       "target": [
         {
@@ -76,7 +78,8 @@
     },
     "linux": {
       "target": ["AppImage", "deb", "rpm"],
-      "category": "Graphics"
+      "category": "Graphics",
+      "syncDesktopName": true
     }
   }
 }
