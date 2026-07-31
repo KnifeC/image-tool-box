@@ -2,6 +2,11 @@
   "name": "@imagetoolbox/desktop",
   "version": "0.1.0",
   "private": true,
+  "author": {
+    "name": "KnifeC",
+    "email": "keshanechen@gmail.com"
+  },
+  "homepage": "https://github.com/KnifeC/image-tool-box",
   "desktopName": "com.imagetoolbox.app.desktop",
   "type": "commonjs",
   "main": "dist/main.js",
