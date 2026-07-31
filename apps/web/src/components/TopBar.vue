@@ -23,6 +23,7 @@ const { locale, t } = useI18n();
 const renaming = ref(false);
 const nameDraft = ref("");
 const nameInput = ref<HTMLInputElement | null>(null);
+const brandIconUrl = `${import.meta.env.BASE_URL}icon.svg`;
 
 async function importImages() {
   const files = await platform.openFiles({
@@ -58,9 +59,7 @@ function cancelRename() {
 <template>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <span></span>
-      </span>
+      <img class="brand-mark" :src="brandIconUrl" alt="" aria-hidden="true" />
       <strong>ImageToolBox</strong>
     </div>
 

@@ -50,12 +50,17 @@ let mainWindow: BrowserWindow | null = null;
 let currentLocale: AppLocale = "en";
 
 function createWindow() {
+  const windowIcon = app.isPackaged
+    ? path.join(process.resourcesPath, "icon.png")
+    : path.resolve(__dirname, "../build/icon.png");
+
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 960,
     minWidth: 980,
     minHeight: 680,
     backgroundColor: "#f1f3f7",
+    icon: windowIcon,
     show: false,
     title: "ImageToolBox",
     webPreferences: {

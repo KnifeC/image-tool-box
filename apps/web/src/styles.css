@@ -93,36 +93,10 @@ textarea:focus-visible {
 }
 
 .brand-mark {
-  position: relative;
-  display: inline-block;
+  display: block;
   width: 26px;
   height: 26px;
-  border: 3px solid var(--accent);
-  border-radius: 5px 5px 11px 5px;
-}
-
-.brand-mark::before,
-.brand-mark::after,
-.brand-mark span {
-  position: absolute;
-  content: "";
-  background: var(--accent);
-}
-
-.brand-mark::before {
-  top: -3px;
-  right: -3px;
-  width: 11px;
-  height: 9px;
-  border-radius: 0 4px 0 5px;
-}
-
-.brand-mark::after {
-  right: 3px;
-  bottom: 4px;
-  width: 10px;
-  height: 7px;
-  clip-path: polygon(0 100%, 45% 30%, 70% 65%, 100% 10%, 100% 100%);
+  flex: 0 0 auto;
 }
 
 .document-name {
@@ -1631,7 +1605,6 @@ select:disabled {
   .brand-mark {
     width: 21px;
     height: 21px;
-    border-width: 2px;
   }
 
   .document-name {

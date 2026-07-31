@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
                   src: "icon.svg",
                   sizes: "any",
                   type: "image/svg+xml",
-                  purpose: "any maskable",
+                  purpose: "any",
                 },
               ],
             },

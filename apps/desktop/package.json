@@ -44,6 +44,10 @@
       {
         "from": "../web/dist-desktop",
         "to": "renderer"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "directories": {
