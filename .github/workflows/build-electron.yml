@@ -25,7 +25,9 @@ jobs:
             os: windows-latest
             command: pnpm dist:win
             artifact_name: electron-windows-x64
-            artifact_path: out/*.exe
+            artifact_path: |
+              out/*.exe
+              out/*.zip
           - name: macOS x64 and arm64
             os: macos-latest
             command: pnpm dist:mac

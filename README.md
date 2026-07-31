@@ -30,7 +30,7 @@ pnpm dev:desktop
 
 ```bash
 pnpm build:web   # 构建 Web / PWA
-pnpm dist:win    # 打包 Windows 便携版
+pnpm dist:win    # Windows x64 便携版 EXE 和免安装 ZIP
 ```
 
 macOS 和 Linux 可分别使用 `pnpm dist:mac`、`pnpm dist:linux`，需要在对应系统上执行。Linux 构建会生成 AppImage、DEB 和 RPM。
