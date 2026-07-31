@@ -55,6 +55,12 @@ const i18n = createI18n({
         copyPng: "复制画布为 PNG",
         copiedPng: "PNG 已复制到剪贴板",
       },
+      layout: {
+        resizeTools: "调整左侧工具面板宽度",
+        resizeInspector: "调整右侧属性面板宽度",
+        resizeToolsHint: "拖动调整工具面板宽度，双击恢复默认",
+        resizeInspectorHint: "拖动调整属性面板宽度，双击恢复默认",
+      },
       mobile: {
         properties: "属性",
         layers: "图层",
@@ -246,6 +252,13 @@ const i18n = createI18n({
         export: "Export",
         copyPng: "Copy canvas as PNG",
         copiedPng: "PNG copied to clipboard",
+      },
+      layout: {
+        resizeTools: "Resize the left tools panel",
+        resizeInspector: "Resize the right properties panel",
+        resizeToolsHint: "Drag to resize the tools panel; double-click to reset",
+        resizeInspectorHint:
+          "Drag to resize the properties panel; double-click to reset",
       },
       mobile: {
         properties: "Properties",
