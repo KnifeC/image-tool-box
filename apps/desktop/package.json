@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist:win": "pnpm build && electron-builder --win portable --x64",
     "dist:mac": "pnpm build && electron-builder --mac dmg zip --x64 --arm64",
-    "dist:linux": "pnpm build && electron-builder --linux AppImage deb --x64"
+    "dist:linux": "pnpm build && electron-builder --linux AppImage deb rpm --x64"
   },
   "dependencies": {
     "@imagetoolbox/platform-api": "workspace:*",
@@ -71,7 +71,7 @@
       "category": "public.app-category.graphics-design"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": ["AppImage", "deb", "rpm"],
       "category": "Graphics"
     }
   }

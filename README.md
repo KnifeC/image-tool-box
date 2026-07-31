@@ -33,7 +33,18 @@ pnpm build:web   # 构建 Web / PWA
 pnpm dist:win    # 打包 Windows 便携版
 ```
 
-macOS 和 Linux 可分别使用 `pnpm dist:mac`、`pnpm dist:linux`，需要在对应系统上执行。
+macOS 和 Linux 可分别使用 `pnpm dist:mac`、`pnpm dist:linux`，需要在对应系统上执行。Linux 构建会生成 AppImage、DEB 和 RPM。
+
+### GitHub Actions 多平台打包
+
+在仓库的 **Actions → Build Electron → Run workflow** 中可以手动构建。构建完成后，可在该次运行的 Artifacts 中下载 Windows、macOS 和 Linux 安装包。
+
+推送 `v` 开头的版本标签时（例如 `v0.1.0`），工作流还会自动创建对应的 GitHub Release 并上传所有平台的安装包：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## 技术栈
 

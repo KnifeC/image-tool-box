@@ -1,0 +1,102 @@
+name: Build Electron
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            command: pnpm dist:win
+            artifact_name: electron-windows-x64
+            artifact_path: out/*.exe
+          - name: macOS x64 and arm64
+            os: macos-latest
+            command: pnpm dist:mac
+            artifact_name: electron-macos
+            artifact_path: |
+              out/*.dmg
+              out/*.zip
+          - name: Linux x64
+            os: ubuntu-latest
+            command: pnpm dist:linux
+            artifact_name: electron-linux-x64
+            artifact_path: |
+              out/*.AppImage
+              out/*.deb
+              out/*.rpm
+
+    env:
+      # 构建未签名的 macOS 包；配置证书后可移除此项并接入签名/公证。
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: ${{ matrix.command }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
